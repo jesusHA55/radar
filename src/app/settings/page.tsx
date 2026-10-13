@@ -16,6 +16,7 @@ import {
   watches,
 } from "@/db/schema";
 import { resolveFlightProviderId } from "@/lib/flights";
+import { getSerpAccount } from "@/lib/flights/serp-account";
 import { creditBudget, monthUsage, usageByProvider } from "@/lib/gateway/meter";
 import { tunnelUrl } from "@/lib/host/tunnel";
 import { activeTransport, emailFrom } from "@/lib/notifications";
@@ -64,6 +65,9 @@ async function SettingsContent() {
     Promise.resolve(creditBudget()),
     usageByProvider(),
   ]);
+
+  // Live SerpApi quota (only relevant when that provider is active).
+  const serpAccount = providerId === "serpapi" ? await getSerpAccount() : null;
 
   const counts = await Promise.all([
     db.select({ n: sql<number>`count(*)::int` }).from(watches),
@@ -210,6 +214,20 @@ async function SettingsContent() {
           {Math.max(0, budget - usage.credits).toLocaleString()} credits remaining ·
           ${(usage.costMicros / 1_000_000).toFixed(2)} estimated cost
         </p>
+
+        {serpAccount && (
+          <div className="mt-3 rounded-lg bg-zinc-50 px-3 py-2 text-xs dark:bg-zinc-900">
+            <p className="font-medium text-zinc-700 dark:text-zinc-200">
+              SerpApi: {serpAccount.searchesLeft.toLocaleString()} of{" "}
+              {serpAccount.searchesPerMonth.toLocaleString()} searches left
+              {serpAccount.renewalDate ? ` · renews ${serpAccount.renewalDate}` : ""}
+            </p>
+            <p className="mt-0.5 text-zinc-500 dark:text-zinc-400">
+              The count above is a conservative estimate — SerpApi serves identical
+              queries from its 1-hour cache for free, so real usage is usually lower.
+            </p>
+          </div>
+        )}
 
         {byProvider.length > 0 && (
           <table className="mt-4 w-full text-sm">

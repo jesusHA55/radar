@@ -1,0 +1,18 @@
+[Unit]
+Description=Radar public URL (Cloudflare quick tunnel)
+Documentation=file://__RADAR_DIR__/pi/README.md
+After=network-online.target radar-app.service
+Wants=network-online.target radar-app.service
+
+[Service]
+Type=simple
+User=__RADAR_USER__
+WorkingDirectory=__RADAR_DIR__
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=TUNNEL_URL_FILE=/var/lib/radar/tunnel-url.txt
+ExecStart=__RADAR_DIR__/pi/scripts/run-tunnel.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

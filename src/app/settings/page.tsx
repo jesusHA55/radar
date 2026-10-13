@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 
 import { setProviderAction } from "@/app/settings/actions";
+import { TestEmailButton } from "@/components/test-email-button";
 import { requireCurrentUser } from "@/lib/auth/current-user";
 import { db } from "@/db/client";
 import {
@@ -16,6 +17,8 @@ import {
 } from "@/db/schema";
 import { resolveFlightProviderId } from "@/lib/flights";
 import { creditBudget, monthUsage, usageByProvider } from "@/lib/gateway/meter";
+import { tunnelUrl } from "@/lib/host/tunnel";
+import { activeTransport, emailFrom } from "@/lib/notifications";
 
 export const metadata = { title: "Settings — Radar" };
 
@@ -85,6 +88,15 @@ async function SettingsContent() {
   const pct = budget > 0 ? Math.min(100, (usage.credits / budget) * 100) : 0;
   const serpConfigured = Boolean(process.env.SERPAPI_API_KEY?.trim());
 
+  const transport = activeTransport();
+  const transportLabel =
+    transport === "gmail"
+      ? "Gmail (SMTP)"
+      : transport === "resend"
+        ? "Resend"
+        : "Console (development)";
+  const publicUrl = tunnelUrl();
+
   return (
     <div className="mt-8 space-y-6">
       <section className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
@@ -93,6 +105,42 @@ async function SettingsContent() {
           Signed in as{" "}
           <span className="font-medium text-zinc-900 dark:text-zinc-100">{user.email}</span>
         </p>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
+        <h2 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+          Email &amp; hosting
+        </h2>
+        <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+          <div>
+            <dt className="text-xs text-zinc-500 dark:text-zinc-400">Email transport</dt>
+            <dd className="mt-1 font-medium text-zinc-900 dark:text-zinc-100">{transportLabel}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-zinc-500 dark:text-zinc-400">From address</dt>
+            <dd className="mt-1 break-all font-medium text-zinc-900 dark:text-zinc-100">
+              {emailFrom()}
+            </dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="text-xs text-zinc-500 dark:text-zinc-400">Public URL (tunnel)</dt>
+            <dd className="mt-1 break-all font-medium text-zinc-900 dark:text-zinc-100">
+              {publicUrl ?? "not available (running locally)"}
+            </dd>
+          </div>
+        </dl>
+
+        {transport === "console" && (
+          <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+            No email configured. Magic links are logged to the console and shown
+            for manual sharing. Set <code>SMTP_USER</code> + <code>SMTP_PASS</code>{" "}
+            (Gmail) or <code>RESEND_API_KEY</code> to send real email.
+          </p>
+        )}
+
+        <div className="mt-4">
+          <TestEmailButton email={user.email} />
+        </div>
       </section>
 
       <section className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">

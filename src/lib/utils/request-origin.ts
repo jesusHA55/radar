@@ -6,7 +6,8 @@ import { headers } from "next/headers";
  */
 export async function requestOrigin(): Promise<string> {
   const headerList = await headers();
-  const host = headerList.get("host") ?? "localhost:3000";
+  const host =
+    headerList.get("x-forwarded-host") ?? headerList.get("host") ?? "localhost:3000";
   const proto =
     headerList.get("x-forwarded-proto") ??
     (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");

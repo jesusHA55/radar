@@ -1,0 +1,12 @@
+[Unit]
+Description=Radar monitor poll (one pass)
+Documentation=file://__RADAR_DIR__/pi/README.md
+After=network-online.target radar-app.service
+Wants=network-online.target radar-app.service
+
+[Service]
+Type=oneshot
+User=__RADAR_USER__
+WorkingDirectory=__RADAR_DIR__
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=__RADAR_DIR__/pi/scripts/run-poller.sh

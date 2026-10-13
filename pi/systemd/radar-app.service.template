@@ -1,0 +1,18 @@
+[Unit]
+Description=Radar web app (Next.js)
+Documentation=file://__RADAR_DIR__/pi/README.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__RADAR_USER__
+WorkingDirectory=__RADAR_DIR__
+Environment=NODE_ENV=production
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=__RADAR_DIR__/pi/scripts/run-app.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

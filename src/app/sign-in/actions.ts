@@ -27,7 +27,9 @@ export async function signInAction(
       message:
         result.reason === "not-invited"
           ? "That email isn't on the invite list."
-          : "Please enter a valid email address.",
+          : result.reason === "rate-limited"
+            ? "Too many sign-in links requested. Please try again later."
+            : "Please enter a valid email address.",
     };
   }
 

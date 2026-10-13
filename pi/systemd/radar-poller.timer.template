@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the Radar monitor poll hourly
+Documentation=file://__RADAR_DIR__/pi/README.md
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+AccuracySec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

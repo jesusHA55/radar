@@ -4,6 +4,8 @@ const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
+  // nodemailer uses dynamic requires; keep it out of the bundle.
+  serverExternalPackages: ["nodemailer"],
   turbopack: {
     rules: {
       "*.css": {

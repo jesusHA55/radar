@@ -11,7 +11,7 @@ import { SESSION_COOKIE, getUserBySessionToken } from "@/lib/auth/session";
  * unauthenticated users.
  */
 
-const PUBLIC_PREFIXES = ["/sign-in", "/auth", "/api/cron"];
+const PUBLIC_PREFIXES = ["/sign-in", "/auth", "/api/cron", "/api/health"];
 
 function isPublic(pathname: string): boolean {
   return PUBLIC_PREFIXES.some(

@@ -14,10 +14,16 @@ import { generateToken, hashToken } from "./tokens";
  */
 
 const TOKEN_TTL_MS = 15 * 60 * 1000; // 15 minutes
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
+function rateLimitPerHour(): number {
+  const raw = Number(process.env.MAGIC_LINK_MAX_PER_HOUR);
+  return Number.isFinite(raw) && raw > 0 ? raw : 5;
+}
 
 export type MagicLinkResult = {
   ok: boolean;
-  reason?: "not-invited" | "invalid-email";
+  reason?: "not-invited" | "invalid-email" | "rate-limited";
   /** Present only in dev when email is not configured, for convenience. */
   devUrl?: string;
 };
@@ -30,6 +36,20 @@ export async function requestMagicLink(
   const email = emailRaw.trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return { ok: false, reason: "invalid-email" };
+  }
+
+  // Throttle: cap link requests per email to blunt abuse on a public URL.
+  const [recent] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(loginTokens)
+    .where(
+      and(
+        eq(loginTokens.email, email),
+        gt(loginTokens.createdAt, new Date(Date.now() - RATE_LIMIT_WINDOW_MS)),
+      ),
+    );
+  if ((recent?.count ?? 0) >= rateLimitPerHour()) {
+    return { ok: false, reason: "rate-limited" };
   }
 
   const [existingUser] = await db

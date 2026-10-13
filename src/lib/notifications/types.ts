@@ -25,7 +25,9 @@ export type AlertPayload = {
 
 export type DispatchResult = {
   ok: boolean;
-  /** Delivery channel actually used, e.g. "email" | "dev-log". */
+  /** Delivery channel actually used, e.g. "gmail" | "resend" | "dev-log". */
   channel: string;
   error?: string;
+  /** Present in dev (console transport) so the link can be shared manually. */
+  devUrl?: string;
 };

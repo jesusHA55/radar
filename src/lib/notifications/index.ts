@@ -1,8 +1,15 @@
 import { formatMoney } from "@/lib/flights/types";
 import { formatDate } from "@/lib/utils/format";
+import { sendEmail } from "./transport";
 import type { AlertKind, AlertPayload, DispatchResult } from "./types";
 
 export type { AlertKind, AlertPayload, DispatchResult } from "./types";
+export {
+  activeTransport,
+  emailFrom,
+  sendTestEmail,
+  type TransportId,
+} from "./transport";
 
 const HEADLINE: Record<AlertKind, string> = {
   target: "Price target hit",
@@ -74,54 +81,25 @@ function htmlBody(payload: AlertPayload): string {
   </div>`;
 }
 
-async function sendViaResend(
-  payload: AlertPayload,
-  opts: { apiKey: string; from: string },
-): Promise<DispatchResult> {
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${opts.apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: opts.from,
-      to: payload.toEmail,
-      subject: subject(payload),
-      text: textBody(payload),
-      html: htmlBody(payload),
-    }),
-  });
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    return { ok: false, channel: "email", error: `Resend ${response.status}: ${detail}` };
-  }
-  return { ok: true, channel: "email" };
-}
-
 /**
- * Dispatch an alert.
+ * Dispatch an alert through the active transport.
  *
- * If Resend credentials are configured we send an email; otherwise we log it,
- * so the whole alert pipeline is exercisable locally with no account.
+ * With no email configured the transport logs it, so the whole alert pipeline
+ * is exercisable locally with no account.
  */
 export async function dispatchAlert(payload: AlertPayload): Promise<DispatchResult> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.ALERT_FROM_EMAIL;
+  const result = await sendEmail({
+    to: payload.toEmail,
+    subject: subject(payload),
+    text: textBody(payload),
+    html: htmlBody(payload),
+  });
 
-  if (apiKey && from) {
-    try {
-      return await sendViaResend(payload, { apiKey, from });
-    } catch (error) {
-      return { ok: false, channel: "email", error: String(error) };
-    }
+  if (!result.ok) {
+    console.error(`[alert] delivery via ${result.channel} failed: ${result.error}`);
   }
 
-  console.log(
-    `[alert:dev-log] ${subject(payload)}\n${textBody(payload)}\n(to: ${payload.toEmail})`,
-  );
-  return { ok: true, channel: "dev-log" };
+  return { ok: result.ok, channel: result.channel, error: result.error };
 }
 
 /** Send a sign-in magic link. Falls back to logging it in development. */
@@ -129,9 +107,6 @@ export async function sendMagicLinkEmail(input: {
   to: string;
   url: string;
 }): Promise<DispatchResult> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.ALERT_FROM_EMAIL;
-
   const text = [
     "Sign in to Radar",
     "",
@@ -151,32 +126,17 @@ export async function sendMagicLinkEmail(input: {
     <p style="color:#71717a;font-size:12px;margin:0">This link expires in 15 minutes and can only be used once.</p>
   </div>`;
 
-  if (apiKey && from) {
-    try {
-      const response = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from,
-          to: input.to,
-          subject: "Sign in to Radar",
-          text,
-          html,
-        }),
-      });
-      if (!response.ok) {
-        const detail = await response.text().catch(() => "");
-        return { ok: false, channel: "email", error: `Resend ${response.status}: ${detail}` };
-      }
-      return { ok: true, channel: "email" };
-    } catch (error) {
-      return { ok: false, channel: "email", error: String(error) };
-    }
-  }
+  const result = await sendEmail({
+    to: input.to,
+    subject: "Sign in to Radar",
+    text,
+    html,
+  });
 
-  console.log(`[magic-link:dev-log] ${input.to}\n  ${input.url}`);
-  return { ok: true, channel: "dev-log" };
+  return {
+    ok: result.ok,
+    channel: result.channel,
+    error: result.error,
+    devUrl: result.channel === "dev-log" ? input.url : undefined,
+  };
 }

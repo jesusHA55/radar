@@ -121,7 +121,8 @@ overlap window is exact. Call volume is bounded and every sub-search is cached.
 
 ### Authentication
 
-Invite-only and passwordless. A magic link is emailed via Resend, or logged in
+Invite-only and passwordless. A magic link is emailed via **Gmail/SMTP** or
+**Resend** (auto-selected — see *Email* below), or logged to the console in
 development. Tokens are 256-bit random and stored **hashed** only; login links
 are single-use and expire in 15 minutes. Sessions live in an httpOnly,
 SameSite=lax cookie (hash at rest, 30-day expiry). A single **proxy**
@@ -154,6 +155,12 @@ already signed in keeps its access.
 ## Project structure
 
 ```
+pi/
+  README.md                 Raspberry Pi runbook (systemd + Cloudflare tunnel)
+  install.sh / uninstall.sh install or remove the services
+  deploy.sh                 build + migrate + restart on the Pi
+  systemd/                  unit + timer templates (app, tunnel, poller)
+  scripts/                  run-app / run-tunnel / run-poller
 scripts/
   dev.mjs                   one-command dev: DB → migrate → seed → Next
   db-server.mjs             embedded PostgreSQL for local development
@@ -212,6 +219,13 @@ override.
 | `EXPLORE_CACHE_TTL_SECONDS` | `21600` | Explore `everywhere` cache lifetime |
 | `MEET_CACHE_TTL_SECONDS` | `1800` | Meet leg-search cache lifetime |
 | `MEET_ANCHORS` | `1` | Aligned re-pricing anchors per Meet destination |
+| `EMAIL_TRANSPORT` | auto | `gmail` \| `resend` \| `console` |
+| `MAIL_FROM` | — | From address for outgoing mail |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` | `smtp.gmail.com` / `465` / `true` | SMTP settings (Gmail) |
+| `SMTP_USER` / `SMTP_PASS` | — | Gmail address + App Password |
+| `MAGIC_LINK_MAX_PER_HOUR` | `5` | Sign-in link throttle per email |
+| `TUNNEL_URL_FILE` | `/var/lib/radar/tunnel-url.txt` | Where the tunnel writes its URL |
+| `PUBLIC_URL` | — | Stable public origin (named tunnel) |
 
 ## Scripts
 
@@ -241,7 +255,40 @@ npm run db:server   # just the local database (leave running)
 npm run db:setup    # migrate + seed against DATABASE_URL
 ```
 
+## Email
+
+One transport is auto-selected (override with `EMAIL_TRANSPORT`):
+
+| Transport | When | Notes |
+| --- | --- | --- |
+| **Gmail (SMTP)** | `SMTP_USER` + `SMTP_PASS` set | Free, sends to anyone, **no domain needed**. Use a Google **App Password** (2‑Step Verification required). ~500 recipients/day. |
+| **Resend** | `RESEND_API_KEY` + `ALERT_FROM_EMAIL` set | Requires a verified domain. |
+| **Console** | neither | The link/alert is logged and returned for manual sharing — zero setup. |
+
+`/settings` shows the active transport and has a **Send test email** button.
+Magic links and monitor alerts both route through the same transport.
+
+## Running on a Raspberry Pi
+
+The `pi/` folder runs Radar as **systemd** services — the app, a Cloudflare
+**quick tunnel**, and an hourly poller — and is fully self-contained, so Mac dev
+(`npm run dev`) is unaffected. Full runbook: [`pi/README.md`](pi/README.md).
+
+```bash
+cp pi/env.example .env.local          # DB, Gmail, CRON_SECRET
+npm ci && npm run build && npm run db:migrate
+npm run invite -- you@gmail.com
+sudo ./pi/install.sh                  # app + tunnel + poller
+cat /var/lib/radar/tunnel-url.txt     # the public URL (also in /settings)
+```
+
+Quick-tunnel URLs change on restart; `/settings` (or `GET /api/tunnel-url`)
+always shows the current one. `GET /api/health` is a public DB-backed health check.
+
 ## Deploying
+
+> Running it yourself (a Raspberry Pi, or any Linux box) vs a hosted platform —
+> see **Running on a Raspberry Pi** below.
 
 1. Provision Postgres (Supabase/Neon) and set `DATABASE_URL`.
 2. Run `npm run db:migrate` (and optionally `db:seed`) against it.

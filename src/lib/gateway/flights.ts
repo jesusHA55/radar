@@ -3,6 +3,7 @@ import type {
   DestinationDeal,
   EverywhereSpec,
   Itinerary,
+  SearchOptions,
   SearchSpec,
 } from "@/lib/flights/types";
 import { cacheGet, cacheKey, cacheSet } from "./cache";
@@ -32,6 +33,8 @@ export type CallOptions = {
   ttlSeconds?: number;
   /** Bypass any existing cache entry and refresh. */
   fresh?: boolean;
+  /** Extra knobs for a route search (date sampling, thoroughness). */
+  search?: SearchOptions;
 };
 
 function ttlFromEnv(name: string, fallback: number): number {
@@ -97,13 +100,14 @@ export async function getOffers(
   opts: CallOptions = {},
 ): Promise<Sourced<Itinerary[]>> {
   const provider = await getFlightProvider();
+  const searchOptions = opts.search;
   // Monitoring wants fresh data, so offers default to no caching.
   return sourced(provider, {
     endpoint: "searchOffers",
-    params: spec,
+    params: { spec, searchOptions },
     ttlSeconds: opts.ttlSeconds ?? 0,
     fresh: opts.fresh ?? false,
-    credits: provider.credits.search(spec),
-    call: (p) => p.searchOffers(spec),
+    credits: provider.credits.search(spec, searchOptions),
+    call: (p) => p.searchOffers(spec, searchOptions),
   });
 }

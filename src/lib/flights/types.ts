@@ -32,6 +32,18 @@ export type FlightSegment = {
 /** Google's own "is this a good price" signal, when the provider offers it. */
 export type PriceLevel = "low" | "typical" | "high";
 
+/**
+ * Optional knobs for a route search. Providers that need concrete dates (e.g.
+ * Google Flights) can only price a handful of dates across a flexible window,
+ * so `dateSamples` trades credits for accuracy.
+ */
+export type SearchOptions = {
+  /** How many dates to sample across a flexible window. */
+  dateSamples?: number;
+  /** Ask the provider for its most thorough result set (slower/costlier). */
+  thorough?: boolean;
+};
+
 export type Itinerary = {
   id: string;
   origin: string;
@@ -53,7 +65,10 @@ export type Itinerary = {
   provider: string;
   /** Optional deep link to verify/book the fare. */
   deepLinkUrl?: string;
+  /** Google's verdict for this route/date, when available. */
   priceLevel?: PriceLevel;
+  /** Typical price band for the route, in minor units. */
+  typicalPriceRangeMinor?: [number, number];
 };
 
 export type SearchSpec = {
@@ -100,7 +115,7 @@ export type DestinationDeal = {
  * second follow-up request, so it costs 2.
  */
 export type ProviderCredits = {
-  search: (spec: SearchSpec) => number;
+  search: (spec: SearchSpec, options?: SearchOptions) => number;
   everywhere: (spec: EverywhereSpec) => number;
 };
 
@@ -115,7 +130,7 @@ export interface FlightProvider {
   readonly label: string;
   readonly credits: ProviderCredits;
 
-  searchOffers(spec: SearchSpec): Promise<Itinerary[]>;
+  searchOffers(spec: SearchSpec, options?: SearchOptions): Promise<Itinerary[]>;
   everywhere(spec: EverywhereSpec): Promise<DestinationDeal[]>;
 }
 

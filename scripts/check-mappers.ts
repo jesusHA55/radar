@@ -6,6 +6,7 @@ import {
   mapExploreDestinations,
   mapOfferToItinerary,
   mergeOffers,
+  serpInsights,
   serpTimeToIso,
   type SerpExploreDestination,
   type SerpOffer,
@@ -43,7 +44,9 @@ assert.equal(carrierCodeFromFlightNumber("VY 1211"), "VY");
 assert.equal(carrierCodeFromFlightNumber("BA301"), "BA");
 
 /* --- one-way offers ----------------------------------------------- */
-const oneWayOffers = mergeOffers(fixture<FlightsResponse>("google-flights-oneway"));
+type FlightsFixture = FlightsResponse & { price_insights?: unknown };
+const oneWay = fixture<FlightsFixture>("google-flights-oneway");
+const oneWayOffers = mergeOffers(oneWay);
 assert.ok(oneWayOffers.length >= 1, "expected at least one one-way offer");
 
 const itinerary = mapOfferToItinerary(oneWayOffers[0], {
@@ -61,6 +64,21 @@ assert.ok(
   "departure should be a local ISO timestamp",
 );
 assert.equal(itinerary.carrierCode.length, 2, "carrier code should be 2 letters");
+
+/* --- price insights ----------------------------------------------- */
+const insights = serpInsights(oneWay as unknown as Record<string, unknown>);
+assert.equal(insights.priceLevel, "typical", "price level should map");
+assert.deepEqual(
+  insights.typicalPriceRangeMinor,
+  [3500, 11500],
+  "typical range should map to minor units",
+);
+const priced = mapOfferToItinerary(oneWayOffers[0], {
+  spec: oneWaySpec,
+  provider: "serpapi",
+  ...insights,
+});
+assert.equal(priced?.priceLevel, "typical", "insights should attach to itineraries");
 
 /* --- explore destinations ----------------------------------------- */
 const explore = fixture<{ destinations?: SerpExploreDestination[] }>("google-travel-explore");

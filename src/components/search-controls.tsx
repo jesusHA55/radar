@@ -23,7 +23,15 @@ export type SearchDefaults = {
   window: FlexibleDatesValue;
   minNights: number;
   maxNights: number;
+  depth: number;
+  thorough: boolean;
 };
+
+const DEPTH_OPTIONS = [
+  { value: 1, label: "Fast — 1 date" },
+  { value: 5, label: "Balanced — 5 dates" },
+  { value: 10, label: "Thorough — 10 dates" },
+] as const;
 
 const SORTED_AIRPORTS = [...AIRPORTS].sort((a, b) => a.city.localeCompare(b.city));
 
@@ -56,6 +64,8 @@ export function SearchControls({
   const [range, setRange] = useState<FlexibleDatesValue>(defaults.window);
   const [minNights, setMinNights] = useState(defaults.minNights);
   const [maxNights, setMaxNights] = useState(defaults.maxNights);
+  const [depth, setDepth] = useState(defaults.depth);
+  const [thorough, setThorough] = useState(defaults.thorough);
 
   function swap() {
     setOrigin(destination);
@@ -77,6 +87,8 @@ export function SearchControls({
       qs.set("minNights", String(minNights));
       qs.set("maxNights", String(maxNights));
     }
+    qs.set("depth", String(depth));
+    if (thorough) qs.set("thorough", "1");
     startTransition(() => router.push(`/search?${qs.toString()}`));
   }
 
@@ -220,6 +232,46 @@ export function SearchControls({
             : "Select a departure span (or a single day)."}
         </p>
       </div>
+
+      <fieldset className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+        <legend className="px-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+          Search quality
+        </legend>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className={labelClass} htmlFor="depth">
+              Dates to sample
+            </label>
+            <select
+              id="depth"
+              className={fieldClass}
+              value={depth}
+              onChange={(e) => setDepth(Number(e.target.value))}
+            >
+              {DEPTH_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <label className="mt-5 flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+            <input
+              type="checkbox"
+              checked={thorough}
+              onChange={(e) => setThorough(e.target.checked)}
+              className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
+            />
+            Thorough (exact browser results)
+          </label>
+        </div>
+        <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+          Google Flights needs exact dates, so each search samples a few across
+          your window — more dates gets you closer to the true cheapest.
+          Estimated cost: ≈{depth * (tripType === "round-trip" ? 2 : 1)} credits
+          (free on the demo provider).
+        </p>
+      </fieldset>
 
       <button
         type="submit"

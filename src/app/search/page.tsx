@@ -8,7 +8,9 @@ import { getAirport, isKnownAirport } from "@/lib/domain/airports";
 import { startOfTodayUTC } from "@/lib/domain/date-utils";
 import { dateWindowFromParams } from "@/lib/domain/date-window";
 import { CABIN_CLASSES, TRIP_TYPES, type CabinClass, type TripType } from "@/lib/domain/trip";
+import { formatMoney } from "@/lib/flights/types";
 import { getOffers } from "@/lib/gateway/flights";
+import { formatDate } from "@/lib/utils/format";
 import { pickEnum, pickInt, pickParam, type RawParams } from "@/lib/utils/params";
 
 export const metadata = { title: "Search — Radar" };
@@ -29,6 +31,19 @@ function toQuery(params: RawParams): string {
     else if (Array.isArray(value) && value[0]) query.set(key, value[0]);
   }
   return query.toString();
+}
+
+const DEPTH_CHOICES = [1, 5, 10];
+
+/** How many dates to sample (provider-dependent). */
+function sampleDepth(params: RawParams): number {
+  const raw = Number(pickParam(params, "depth"));
+  return DEPTH_CHOICES.includes(raw) ? raw : 1;
+}
+
+/** "Thorough" asks the provider for browser-parity results. */
+function isThorough(params: RawParams): boolean {
+  return pickParam(params, "thorough") === "1";
 }
 
 export default function SearchPage({
@@ -92,6 +107,8 @@ async function ControlsFromParams({
     window: { from: window.departFrom, to: window.departTo },
     minNights: window.minNights ?? 3,
     maxNights: window.maxNights ?? 7,
+    depth: sampleDepth(params),
+    thorough: isThorough(params),
   };
 
   return <SearchControls defaults={defaults} todayIso={startOfTodayUTC()} />;
@@ -110,10 +127,12 @@ async function Results({ searchParams }: { searchParams: PageSearchParams }) {
   const cabin = pickEnum<CabinClass>(params, "cabin", CABIN_CLASSES, "economy");
   const adults = pickInt(params, "adults", 1);
   const currency = pickParam(params, "currency") ?? "EUR";
+  const depth = sampleDepth(params);
+  const thorough = isThorough(params);
 
   const { data: offers } = await getOffers(
     { origin, destination, tripType, window, cabin, adults, currency },
-    { ttlSeconds: 0 },
+    { ttlSeconds: 0, search: { dateSamples: depth, thorough } },
   );
 
   const from = getAirport(origin);
@@ -127,15 +146,49 @@ async function Results({ searchParams }: { searchParams: PageSearchParams }) {
     );
   }
 
+  const cheapest = offers[0];
+  const level = cheapest.priceLevel;
+  const range = cheapest.typicalPriceRangeMinor;
+  const levelClass =
+    level === "low"
+      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+      : level === "high"
+        ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+        : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300";
+
   return (
     <section className="mt-8">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          {from?.city ?? origin} → {to?.city ?? destination}
-        </h2>
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+            {from?.city ?? origin} → {to?.city ?? destination}
+          </h2>
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+            <span>
+              Cheapest{" "}
+              <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                {formatMoney(cheapest.price)}
+              </span>{" "}
+              on {formatDate(cheapest.departDate)}
+            </span>
+            {level && (
+              <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide ${levelClass}`}>
+                {level} price
+              </span>
+            )}
+            {range && (
+              <span>
+                · typically{" "}
+                {formatMoney({ amountMinor: range[0], currency: cheapest.price.currency })}–
+                {formatMoney({ amountMinor: range[1], currency: cheapest.price.currency })}
+              </span>
+            )}
+          </p>
+        </div>
         <div className="flex items-center gap-3">
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            {offers.length} offers · cheapest first
+            {offers.length} offers · sampled {depth} date{depth === 1 ? "" : "s"}
+            {thorough ? " · thorough" : ""}
           </p>
           <SaveSearchForm
             kind="search"

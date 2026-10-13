@@ -5,6 +5,7 @@ import {
   mapOfferToItinerary,
   mapSegments,
   mergeOffers,
+  serpInsights,
   type SerpExploreDestination,
   type SerpOffer,
 } from "./serp-mappers";
@@ -14,6 +15,7 @@ import type {
   FlightProvider,
   Itinerary,
   ProviderCredits,
+  SearchOptions,
   SearchSpec,
 } from "./types";
 
@@ -52,8 +54,22 @@ function envInt(name: string, fallback: number): number {
   return Number.isFinite(raw) && raw > 0 ? raw : fallback;
 }
 
-function dateSamples(): number {
-  return Math.min(7, envInt("SERPAPI_DATE_SAMPLES", 1));
+function defaultDateSamples(): number {
+  return Math.min(10, envInt("SERPAPI_DATE_SAMPLES", 1));
+}
+
+/** Date samples for a search: the caller's choice, else the env default. */
+function resolveDateSamples(options?: SearchOptions): number {
+  const requested = options?.dateSamples;
+  if (typeof requested === "number" && Number.isFinite(requested) && requested > 0) {
+    return Math.min(10, Math.floor(requested));
+  }
+  return defaultDateSamples();
+}
+
+/** "Thorough" mirrors the browser: deep search + including hidden results. */
+function thoroughParams(thorough: boolean | undefined): Record<string, string> {
+  return thorough ? { deep_search: "true", show_hidden: "true" } : {};
 }
 
 function roundTripDepth(): number {
@@ -139,15 +155,20 @@ export class SerpFlightProvider implements FlightProvider {
   readonly label = "SerpApi (Google Flights)";
 
   readonly credits: ProviderCredits = {
-    search: (spec) => {
+    search: (spec, options) => {
       const perSample = spec.tripType === "round-trip" ? 1 + roundTripDepth() : 1;
-      return dateSamples() * perSample;
+      return resolveDateSamples(options) * perSample;
     },
     everywhere: () => 1,
   };
 
-  async searchOffers(spec: SearchSpec): Promise<Itinerary[]> {
-    const dates = sampleDates(spec.window.departFrom, spec.window.departTo, dateSamples());
+  async searchOffers(spec: SearchSpec, options?: SearchOptions): Promise<Itinerary[]> {
+    const dates = sampleDates(
+      spec.window.departFrom,
+      spec.window.departTo,
+      resolveDateSamples(options),
+    );
+    const thorough = options?.thorough;
     const results: Itinerary[] = [];
 
     for (const departDate of dates) {
@@ -156,27 +177,31 @@ export class SerpFlightProvider implements FlightProvider {
           ...baseParams(spec),
           type: 2,
           outbound_date: departDate,
+          ...thoroughParams(thorough),
         });
+        const insights = serpInsights(json);
         mergeOffers(json).forEach((offer, index) => {
           const itinerary = mapOfferToItinerary(offer, {
             spec,
             provider: this.id,
             idSuffix: `${departDate}-${index}`,
+            ...insights,
           });
           if (itinerary) results.push(itinerary);
         });
       } else {
-        results.push(...(await this.searchRoundTrip(spec, departDate)));
+        results.push(...(await this.searchRoundTrip(spec, departDate, thorough)));
       }
     }
 
     return results.sort((a, b) => a.price.amountMinor - b.price.amountMinor);
   }
 
-  /** First call gets outbound options; each follow-up resolves the return leg. */
+  /** First call gets outbound options; a follow-up resolves the return leg. */
   private async searchRoundTrip(
     spec: SearchSpec,
     departDate: string,
+    thorough: boolean | undefined,
   ): Promise<Itinerary[]> {
     const returnDate = returnDateFor(spec, departDate);
     const outboundJson = await serpFetch({
@@ -184,9 +209,16 @@ export class SerpFlightProvider implements FlightProvider {
       type: 1,
       outbound_date: departDate,
       return_date: returnDate,
+      ...thoroughParams(thorough),
     });
+    const insights = serpInsights(outboundJson);
 
-    const outbounds = mergeOffers(outboundJson);
+    // Google prices each outbound option as a *round-trip total*, so the
+    // cheapest offer here is the cheapest trip — sort before spending credits.
+    const outbounds = mergeOffers(outboundJson)
+      .filter((offer) => offer.price !== undefined)
+      .sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
+
     const depth = Math.max(1, Math.min(roundTripDepth(), outbounds.length || 1));
     const itineraries: Itinerary[] = [];
 
@@ -201,18 +233,22 @@ export class SerpFlightProvider implements FlightProvider {
           outbound_date: departDate,
           return_date: returnDate,
           departure_token: outbound.departure_token,
+          ...thoroughParams(thorough),
         });
-        returnOffer = mergeOffers(returnJson)[0];
+        // Pick the cheapest return, not merely the first one.
+        returnOffer = mergeOffers(returnJson)
+          .filter((offer) => offer.price !== undefined)
+          .sort((a, b) => (a.price ?? 0) - (b.price ?? 0))[0];
       }
 
-      const returnSegments = mapSegments(returnOffer?.flights);
       const itinerary = mapOfferToItinerary(outbound, {
         spec,
         provider: this.id,
-        returnSegments,
+        returnSegments: mapSegments(returnOffer?.flights),
         returnDate,
-        priceOverrideMajor: returnOffer?.price,
+        priceOverrideMajor: returnOffer?.price ?? outbound.price,
         idSuffix: `${departDate}-rt-${i}`,
+        ...insights,
       });
       if (itinerary) itineraries.push(itinerary);
     }

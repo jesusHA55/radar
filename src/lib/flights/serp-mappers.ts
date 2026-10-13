@@ -10,6 +10,7 @@ import {
   type DestinationDeal,
   type FlightSegment,
   type Itinerary,
+  type PriceLevel,
   type SearchSpec,
 } from "./types";
 
@@ -102,6 +103,35 @@ export function mergeOffers(json: {
   return [...(json.best_flights ?? []), ...(json.other_flights ?? [])];
 }
 
+export type SerpInsights = {
+  priceLevel?: PriceLevel;
+  /** Minor units. */
+  typicalPriceRangeMinor?: [number, number];
+};
+
+/** Pull Google's `price_insights` (route/date verdict + typical band). */
+export function serpInsights(json: Record<string, unknown>): SerpInsights {
+  const insights = json.price_insights as
+    | { price_level?: unknown; typical_price_range?: unknown }
+    | undefined;
+
+  const level = typeof insights?.price_level === "string" ? insights.price_level : undefined;
+  const priceLevel: PriceLevel | undefined =
+    level === "low" || level === "typical" || level === "high" ? level : undefined;
+
+  const raw = Array.isArray(insights?.typical_price_range)
+    ? (insights.typical_price_range as unknown[])
+    : undefined;
+  const nums = (raw ?? []).filter((n): n is number => typeof n === "number" && Number.isFinite(n));
+
+  const typicalPriceRangeMinor: [number, number] | undefined =
+    nums.length >= 2
+      ? [Math.round(nums[0] * 100), Math.round(nums[1] * 100)]
+      : undefined;
+
+  return { priceLevel, typicalPriceRangeMinor };
+}
+
 /* ------------------------------------------------------------------ */
 /* Itineraries                                                         */
 /* ------------------------------------------------------------------ */
@@ -114,6 +144,9 @@ type MapItineraryOptions = {
   /** Combined round-trip price, when it comes from the return step. */
   priceOverrideMajor?: number;
   idSuffix?: string;
+  /** Route/date price insights, if the response carried them. */
+  priceLevel?: PriceLevel;
+  typicalPriceRangeMinor?: [number, number];
 };
 
 export function mapOfferToItinerary(
@@ -144,6 +177,8 @@ export function mapOfferToItinerary(
     segments,
     returnSegments: options.returnSegments,
     provider: options.provider,
+    priceLevel: options.priceLevel,
+    typicalPriceRangeMinor: options.typicalPriceRangeMinor,
   } satisfies Itinerary;
 }
 

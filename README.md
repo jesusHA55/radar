@@ -128,6 +128,20 @@ SameSite=lax cookie (hash at rest, 30-day expiry). A single **proxy**
 (`src/proxy.ts`) gates every route except the sign-in flow and the
 secret-protected cron endpoint.
 
+The **invite list** (`invites` table) is the allowlist: you may sign in if you
+already have an account or hold an invite. The first successful sign-in creates
+the account and marks the invite accepted. Manage it from **`/invites`** (add,
+see pending/joined status, send a sign-in link, remove) or the CLI:
+
+```bash
+npm run invite -- friend@example.com another@example.com
+npm run invite -- --list
+```
+
+Seeding also creates an invite for `LOCAL_USER_EMAIL`, plus `SEED_FRIEND_EMAIL`
+if set. Removing an invite only forgets a *pending* invitation — an account that
+already signed in keeps its access.
+
 ## Tech stack
 
 - **Next.js 16** (App Router, Cache Components / Partial Prerendering, Turbopack)
@@ -143,6 +157,8 @@ secret-protected cron endpoint.
 scripts/
   dev.mjs                   one-command dev: DB → migrate → seed → Next
   db-server.mjs             embedded PostgreSQL for local development
+  invite.ts                 add / list invites from the CLI
+  check-mappers.ts          fixture assertions for the SerpApi mappers
 src/
   app/                      routes (App Router, Cache Components)
     page.tsx                home / feature overview
@@ -150,6 +166,7 @@ src/
     monitor/                watch list, detail, server actions
     meet/                   multi-origin optimizer
     saved/  settings/       saved searches; account + quota dashboard
+    invites/                invite allowlist management
     sign-in/  auth/         passwordless sign-in; magic-link verify + sign-out
     api/cron/poll/          protected polling endpoint for schedulers
   components/               UI (calendar + feature forms, cards, sparkline)
@@ -209,6 +226,7 @@ override.
 | `npm run db:generate` | Generate SQL migrations from the schema |
 | `npm run poll` / `poll:loop` | Run the monitoring worker once / on a loop |
 | `npm run test:mappers` | Verify SerpApi response mapping against fixtures |
+| `npm run invite` | Add invites from the CLI (`-- --list` to list) |
 
 ## Data & persistence
 

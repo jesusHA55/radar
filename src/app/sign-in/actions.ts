@@ -1,9 +1,8 @@
 "use server";
 
-import { headers } from "next/headers";
-
 import { requestMagicLink } from "@/lib/auth/magic-link";
 import { safeRedirectPath } from "@/lib/auth/redirect";
+import { requestOrigin } from "@/lib/utils/request-origin";
 
 export type SignInState = {
   ok: boolean;
@@ -18,13 +17,7 @@ export async function signInAction(
 ): Promise<SignInState> {
   const email = String(formData.get("email") ?? "").trim();
   const next = safeRedirectPath(String(formData.get("next") ?? ""), "/");
-
-  const headerList = await headers();
-  const host = headerList.get("host") ?? "localhost:3000";
-  const proto =
-    headerList.get("x-forwarded-proto") ??
-    (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
-  const origin = `${proto}://${host}`;
+  const origin = await requestOrigin();
 
   const result = await requestMagicLink(email, origin, next === "/" ? undefined : next);
 

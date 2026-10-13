@@ -16,6 +16,7 @@
     "poll": "tsx src/lib/monitor/cli.ts once",
     "poll:loop": "tsx src/lib/monitor/cli.ts loop",
     "test:mappers": "tsx scripts/check-mappers.ts",
+    "invite": "tsx scripts/invite.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

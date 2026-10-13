@@ -16,7 +16,7 @@ loadLocalEnv();
  * Run with: npm run db:seed  (or npm run db:setup)
  */
 
-const LOCAL_USER_EMAIL = process.env.LOCAL_USER_EMAIL ?? "you@radar.local";
+const LOCAL_USER_EMAIL = (process.env.LOCAL_USER_EMAIL ?? "you@radar.local").toLowerCase();
 const BACKFILL_DAYS = 14;
 const MS_PER_DAY = 86_400_000;
 

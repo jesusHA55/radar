@@ -121,7 +121,9 @@ async function serpFetch(
 function sampleDates(fromISO: string, toISO: string, count: number): string[] {
   const dates = eachDate(fromISO, toISO);
   if (dates.length === 0) return [fromISO];
-  if (count <= 1 || dates.length <= count) return [dates[0]];
+  if (count <= 1) return [dates[0]];
+  // Short window: sample every day rather than collapsing to the first.
+  if (dates.length <= count) return dates;
   const step = (dates.length - 1) / (count - 1);
   const picked: string[] = [];
   for (let i = 0; i < count; i++) picked.push(dates[Math.round(i * step)]);

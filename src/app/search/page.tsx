@@ -193,6 +193,15 @@ async function Results({ searchParams }: { searchParams: PageSearchParams }) {
         ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
         : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300";
 
+  // Group by departure date so the sampled days are obvious at a glance.
+  const byDate = new Map<string, typeof offers>();
+  for (const offer of offers) {
+    const list = byDate.get(offer.departDate);
+    if (list) list.push(offer);
+    else byDate.set(offer.departDate, [offer]);
+  }
+  const dateGroups = [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b));
+
   return (
     <section className="mt-8">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
@@ -224,7 +233,8 @@ async function Results({ searchParams }: { searchParams: PageSearchParams }) {
         </div>
         <div className="flex items-center gap-3">
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            {offers.length} offers · sampled {depth} date{depth === 1 ? "" : "s"}
+            {offers.length} offers · {dateGroups.length} date
+            {dateGroups.length === 1 ? "" : "s"} searched
             {thorough ? " · thorough" : ""}
           </p>
           <SaveSearchForm
@@ -234,9 +244,24 @@ async function Results({ searchParams }: { searchParams: PageSearchParams }) {
           />
         </div>
       </div>
-      <div className="space-y-3">
-        {offers.map((offer) => (
-          <OfferCard key={offer.id} itinerary={offer} />
+      <div className="space-y-6">
+        {dateGroups.map(([date, group]) => (
+          <div key={date}>
+            <div className="mb-2 flex items-baseline justify-between border-b border-zinc-100 pb-1.5 dark:border-zinc-900">
+              <h3 className="text-xs font-medium uppercase tracking-wide text-zinc-600 dark:text-zinc-300">
+                {formatDate(date)}
+              </h3>
+              <p className="text-xs text-zinc-400">
+                {group.length} option{group.length === 1 ? "" : "s"} · from{" "}
+                {formatMoney(group[0].price)}
+              </p>
+            </div>
+            <div className="space-y-3">
+              {group.map((offer) => (
+                <OfferCard key={offer.id} itinerary={offer} />
+              ))}
+            </div>
+          </div>
         ))}
       </div>
     </section>

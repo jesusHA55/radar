@@ -23,6 +23,7 @@ export type NewWatchInput = {
   thresholdType: ThresholdType;
   thresholdValue: number | null;
   cadenceMinutes: number;
+  dateSamples: number;
 };
 
 export type WatchWithHistory = {

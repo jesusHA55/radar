@@ -73,6 +73,7 @@ export function parseWatchFormData(formData: FormData): ParseResult {
   const dateWindow = dateWindowFromParams(rawParams(formData));
   const adults = Math.min(9, Math.max(1, Number(text(formData, "adults")) || 1));
   const cadenceMinutes = Number(text(formData, "cadenceMinutes")) || 720;
+  const dateSamples = Math.min(10, Math.max(1, Number(text(formData, "dateSamples")) || 1));
   const currency = text(formData, "currency") || "EUR";
 
   return {
@@ -89,6 +90,7 @@ export function parseWatchFormData(formData: FormData): ParseResult {
       thresholdType,
       thresholdValue,
       cadenceMinutes,
+      dateSamples,
     },
   };
 }

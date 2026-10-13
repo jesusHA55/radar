@@ -19,7 +19,7 @@ import {
   type CabinClass,
   type TripType,
 } from "@/lib/domain/trip";
-import { FlexibleDatesCalendar, type FlexibleDatesValue } from "./flexible-dates-calendar";
+import { FlexibleDatesInput, type FlexibleDatesValue } from "./flexible-dates-input";
 
 export type ExploreDefaults = {
   origin: string;
@@ -164,7 +164,7 @@ export function ExploreForm({
 
       <div>
         <p className={labelClass}>Flexible departure dates</p>
-        <FlexibleDatesCalendar value={range} onChange={setRange} minIso={todayIso} />
+        <FlexibleDatesInput value={range} onChange={setRange} minIso={todayIso} />
       </div>
 
       <fieldset className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">

@@ -154,6 +154,12 @@ async function WatchDetail({ params }: { params: Promise<{ id: string }> }) {
             {watch.isActive ? `Active · ${watch.cadenceMinutes / 60}h` : "Paused"}
           </dd>
         </div>
+        <div>
+          <dt className="text-xs text-zinc-500 dark:text-zinc-400">Sampling</dt>
+          <dd className="mt-1 text-zinc-900 dark:text-zinc-100">
+            {watch.dateSamples} date{watch.dateSamples === 1 ? "" : "s"}
+          </dd>
+        </div>
       </dl>
 
       <section className="mt-6 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">

@@ -14,7 +14,7 @@ import {
   type TripType,
 } from "@/lib/domain/trip";
 import { MEET_LIMITS, type MeetParticipant } from "@/lib/meet/types";
-import { FlexibleDatesCalendar, type FlexibleDatesValue } from "./flexible-dates-calendar";
+import { FlexibleDatesInput, type FlexibleDatesValue } from "./flexible-dates-input";
 
 export type MeetDefaults = {
   participants: MeetParticipant[];
@@ -126,7 +126,7 @@ export function MeetForm({ defaults, todayIso }: { defaults: MeetDefaults; today
 
       <div>
         <p className={labelClass}>Shareable flexible dates</p>
-        <FlexibleDatesCalendar value={range} onChange={setRange} minIso={todayIso} />
+        <FlexibleDatesInput value={range} onChange={setRange} minIso={todayIso} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

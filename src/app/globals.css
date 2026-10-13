@@ -24,16 +24,3 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
 }
-
-/* react-day-picker theming, scoped so it inherits our palette. */
-.rdp-theme {
-  --rdp-accent-color: #18181b;
-  --rdp-accent-background-color: #f4f4f5;
-}
-
-@media (prefers-color-scheme: dark) {
-  .rdp-theme {
-    --rdp-accent-color: #fafafa;
-    --rdp-accent-background-color: #27272a;
-  }
-}

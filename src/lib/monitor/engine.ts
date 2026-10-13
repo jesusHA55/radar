@@ -51,8 +51,11 @@ export function marketMultiplier(watchId: string, asOfISO: string): number {
 
 /** The provider's cheapest fare for a watch, before market movement. */
 export async function computeQuote(watch: Watch): Promise<Quote | null> {
-  // Monitoring always wants fresh data, so caching is disabled.
-  const { data: offers } = await getOffers(searchSpec(watch), { ttlSeconds: 0 });
+  // Monitoring wants fresh data; `dateSamples` covers the watch's window.
+  const { data: offers } = await getOffers(searchSpec(watch), {
+    ttlSeconds: 0,
+    search: { dateSamples: watch.dateSamples },
+  });
   if (offers.length === 0) return null;
 
   const best = offers.reduce((a, b) =>

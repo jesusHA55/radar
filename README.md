@@ -119,6 +119,10 @@ market multiplier so history moves), persists the observation, evaluates the
 threshold, and dispatches an alert with an anti-spam cooldown. It runs three
 ways: `POST /api/cron/poll` (schedulers), `npm run poll`, and `npm run poll:loop`.
 
+Each watch samples `dateSamples` departure dates across its window (**1** by
+default, up to 10) so it tracks the window's cheapest fare rather than just the
+first day — the same knob the Search page exposes as "dates to sample".
+
 ### The Meet optimizer
 
 `src/lib/meet/optimize.ts` fans `everywhere` out over each origin (cached),

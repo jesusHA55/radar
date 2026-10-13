@@ -12,7 +12,7 @@ import {
   type CabinClass,
   type TripType,
 } from "@/lib/domain/trip";
-import { FlexibleDatesCalendar, type FlexibleDatesValue } from "./flexible-dates-calendar";
+import { FlexibleDatesInput, type FlexibleDatesValue } from "./flexible-dates-input";
 
 export type SearchDefaults = {
   origin: string;
@@ -225,7 +225,7 @@ export function SearchControls({
 
       <div>
         <p className={labelClass}>Flexible departure dates</p>
-        <FlexibleDatesCalendar
+        <FlexibleDatesInput
           value={range}
           onChange={setRange}
           minIso={todayIso}

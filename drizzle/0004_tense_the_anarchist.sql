@@ -1,0 +1,1 @@
+ALTER TABLE "watches" ADD COLUMN "date_samples" integer DEFAULT 1 NOT NULL;

@@ -19,7 +19,7 @@ import {
   type ActionState,
   type ThresholdType,
 } from "@/lib/monitor/types";
-import { FlexibleDatesCalendar, type FlexibleDatesValue } from "./flexible-dates-calendar";
+import { FlexibleDatesInput, type FlexibleDatesValue } from "./flexible-dates-input";
 
 type Props = {
   todayIso: string;
@@ -43,6 +43,7 @@ export function WatchForm({ todayIso, defaultWindow }: Props) {
   const [range, setRange] = useState<FlexibleDatesValue>(defaultWindow);
   const [minNights, setMinNights] = useState(3);
   const [maxNights, setMaxNights] = useState(7);
+  const [dateSamples, setDateSamples] = useState(1);
 
   return (
     <form action={formAction} className="space-y-5">
@@ -166,7 +167,7 @@ export function WatchForm({ todayIso, defaultWindow }: Props) {
 
       <div>
         <p className={labelClass}>Flexible departure dates</p>
-        <FlexibleDatesCalendar value={range} onChange={setRange} minIso={todayIso} />
+        <FlexibleDatesInput value={range} onChange={setRange} minIso={todayIso} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -224,18 +225,43 @@ export function WatchForm({ todayIso, defaultWindow }: Props) {
         )}
       </div>
 
-      <div className="max-w-xs">
-        <label className={labelClass} htmlFor="cadenceMinutes">
-          Check frequency
-        </label>
-        <select id="cadenceMinutes" name="cadenceMinutes" className={fieldClass} defaultValue={720}>
-          {CADENCE_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+      <div className="grid max-w-md gap-4 sm:grid-cols-2">
+        <div>
+          <label className={labelClass} htmlFor="cadenceMinutes">
+            Check frequency
+          </label>
+          <select id="cadenceMinutes" name="cadenceMinutes" className={fieldClass} defaultValue={720}>
+            {CADENCE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className={labelClass} htmlFor="dateSamples">
+            Dates to sample
+          </label>
+          <select
+            id="dateSamples"
+            name="dateSamples"
+            className={fieldClass}
+            value={dateSamples}
+            onChange={(e) => setDateSamples(Number(e.target.value))}
+          >
+            <option value={1}>1 — fastest</option>
+            <option value={3}>3</option>
+            <option value={5}>5 — balanced</option>
+            <option value={10}>10 — thorough</option>
+          </select>
+        </div>
       </div>
+
+      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        How many departure dates to price across the window. More dates tracks a
+        truer cheapest fare, but costs more provider credits per check (free on
+        the demo provider).
+      </p>
 
       {/* Serialize the flexible window (client state) into the form submission. */}
       <input type="hidden" name="departFrom" value={range.from ?? ""} />

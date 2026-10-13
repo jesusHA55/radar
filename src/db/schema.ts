@@ -104,6 +104,8 @@ export const watches = pgTable(
     /** Minor units for "target", percent for "drop-percent". */
     thresholdValue: integer("threshold_value"),
     cadenceMinutes: integer("cadence_minutes").notNull().default(720),
+    /** Departure dates priced across the window (1 = fastest, more = truer). */
+    dateSamples: integer("date_samples").notNull().default(1),
     isActive: boolean("is_active").notNull().default(true),
     lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
     lastNotifiedAt: timestamp("last_notified_at", { withTimezone: true }),

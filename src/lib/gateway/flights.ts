@@ -44,6 +44,8 @@ function ttlFromEnv(name: string, fallback: number): number {
 
 export const cacheTtls = {
   everywhere: () => ttlFromEnv("EXPLORE_CACHE_TTL_SECONDS", 6 * 3600),
+  // Short, so rapid re-runs / back-button clicks are free without going stale.
+  search: () => ttlFromEnv("SEARCH_CACHE_TTL_SECONDS", 300),
 };
 
 async function sourced<T>(
@@ -101,13 +103,22 @@ export async function getOffers(
 ): Promise<Sourced<Itinerary[]>> {
   const provider = await getFlightProvider();
   const searchOptions = opts.search;
-  // Monitoring wants fresh data, so offers default to no caching.
+  // Short-cached by default; monitoring overrides to 0 for fresh data.
   return sourced(provider, {
     endpoint: "searchOffers",
     params: { spec, searchOptions },
-    ttlSeconds: opts.ttlSeconds ?? 0,
+    ttlSeconds: opts.ttlSeconds ?? cacheTtls.search(),
     fresh: opts.fresh ?? false,
     credits: provider.credits.search(spec, searchOptions),
     call: (p) => p.searchOffers(spec, searchOptions),
   });
+}
+
+/** Estimated credits a route search will cost (0 for the mock provider). */
+export async function estimateSearchCredits(
+  spec: SearchSpec,
+  options?: SearchOptions,
+): Promise<number> {
+  const provider = await getFlightProvider();
+  return provider.credits.search(spec, options);
 }

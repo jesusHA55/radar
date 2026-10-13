@@ -95,7 +95,14 @@ Switch at runtime in **`/settings`** (persisted in `app_settings`), or via
 worker and Meet both refuse to exceed `MONTHLY_CALL_BUDGET` (default **250** — the
 SerpApi free tier). Round-trips take a second `departure_token` request, so they
 cost 2. Because Google Flights needs concrete dates, a flexible window is
-date-sampled (`SERPAPI_DATE_SAMPLES`, default 1).
+date-sampled.
+
+On the **Search** page you choose how thoroughly to sample — **1 / 5 / 10 dates**
+plus a **Thorough** switch (`deep_search` + `show_hidden` for exact browser
+parity) — with a live credit estimate. Searches are **short-cached**
+(`SEARCH_CACHE_TTL_SECONDS`, default 5 min) so re-runs are free, and a **budget
+guard** refuses a search that would exceed the monthly cap. Set the form's
+default with `SEARCH_DEFAULT_DEPTH`.
 
 ### The provider gateway
 
@@ -217,6 +224,8 @@ override.
 | `SERPAPI_DATE_SAMPLES` | `1` | Dates sampled across a flexible window |
 | `SERPAPI_ROUNDTRIP_DEPTH` | `1` | Return legs resolved per round-trip search |
 | `EXPLORE_CACHE_TTL_SECONDS` | `21600` | Explore `everywhere` cache lifetime |
+| `SEARCH_CACHE_TTL_SECONDS` | `300` | Search results cache lifetime |
+| `SEARCH_DEFAULT_DEPTH` | `1` | Default dates to sample on Search (1/5/10) |
 | `MEET_CACHE_TTL_SECONDS` | `1800` | Meet leg-search cache lifetime |
 | `MEET_ANCHORS` | `1` | Aligned re-pricing anchors per Meet destination |
 | `EMAIL_TRANSPORT` | auto | `gmail` \| `resend` \| `console` |

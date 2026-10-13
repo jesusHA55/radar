@@ -8,8 +8,10 @@ import { getAirport, isKnownAirport } from "@/lib/domain/airports";
 import { startOfTodayUTC } from "@/lib/domain/date-utils";
 import { dateWindowFromParams } from "@/lib/domain/date-window";
 import { CABIN_CLASSES, TRIP_TYPES, type CabinClass, type TripType } from "@/lib/domain/trip";
+import { resolveFlightProviderId } from "@/lib/flights";
 import { formatMoney } from "@/lib/flights/types";
-import { getOffers } from "@/lib/gateway/flights";
+import { estimateSearchCredits, getOffers } from "@/lib/gateway/flights";
+import { checkCallBudget } from "@/lib/gateway/meter";
 import { formatDate } from "@/lib/utils/format";
 import { pickEnum, pickInt, pickParam, type RawParams } from "@/lib/utils/params";
 
@@ -35,10 +37,15 @@ function toQuery(params: RawParams): string {
 
 const DEPTH_CHOICES = [1, 5, 10];
 
+function defaultDepth(): number {
+  const raw = Number(process.env.SEARCH_DEFAULT_DEPTH);
+  return DEPTH_CHOICES.includes(raw) ? raw : 1;
+}
+
 /** How many dates to sample (provider-dependent). */
 function sampleDepth(params: RawParams): number {
   const raw = Number(pickParam(params, "depth"));
-  return DEPTH_CHOICES.includes(raw) ? raw : 1;
+  return DEPTH_CHOICES.includes(raw) ? raw : defaultDepth();
 }
 
 /** "Thorough" asks the provider for browser-parity results. */
@@ -111,7 +118,19 @@ async function ControlsFromParams({
     thorough: isThorough(params),
   };
 
-  return <SearchControls defaults={defaults} todayIso={startOfTodayUTC()} />;
+  const [budget, providerId] = await Promise.all([
+    checkCallBudget(),
+    resolveFlightProviderId(),
+  ]);
+
+  return (
+    <SearchControls
+      defaults={defaults}
+      todayIso={startOfTodayUTC()}
+      creditsRemaining={budget.remaining}
+      chargeable={providerId !== "mock"}
+    />
+  );
 }
 
 async function Results({ searchParams }: { searchParams: PageSearchParams }) {
@@ -130,10 +149,28 @@ async function Results({ searchParams }: { searchParams: PageSearchParams }) {
   const depth = sampleDepth(params);
   const thorough = isThorough(params);
 
-  const { data: offers } = await getOffers(
-    { origin, destination, tripType, window, cabin, adults, currency },
-    { ttlSeconds: 0, search: { dateSamples: depth, thorough } },
-  );
+  const spec = { origin, destination, tripType, window, cabin, adults, currency };
+  const searchOptions = { dateSamples: depth, thorough };
+
+  // Budget guard: never silently exceed the monthly credit cap.
+  const [cost, budget] = await Promise.all([
+    estimateSearchCredits(spec, searchOptions),
+    checkCallBudget(),
+  ]);
+  if (cost > 0 && cost > budget.remaining) {
+    return (
+      <div className="mt-8 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+        <p className="font-medium">Not enough flight-data credits for this search</p>
+        <p className="mt-1">
+          A {depth}-date search costs ≈{cost} credit{cost === 1 ? "" : "s"}, but only{" "}
+          {budget.remaining} remain this month ({budget.credits}/{budget.budget} used). Lower
+          the search depth, or switch to the demo provider in Settings.
+        </p>
+      </div>
+    );
+  }
+
+  const { data: offers } = await getOffers(spec, { search: searchOptions });
 
   const from = getAirport(origin);
   const to = getAirport(destination);

@@ -50,9 +50,13 @@ const labelClass = "mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-
 export function SearchControls({
   defaults,
   todayIso,
+  creditsRemaining,
+  chargeable,
 }: {
   defaults: SearchDefaults;
   todayIso: string;
+  creditsRemaining: number;
+  chargeable: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -66,6 +70,8 @@ export function SearchControls({
   const [maxNights, setMaxNights] = useState(defaults.maxNights);
   const [depth, setDepth] = useState(defaults.depth);
   const [thorough, setThorough] = useState(defaults.thorough);
+
+  const estimatedCredits = depth * (tripType === "round-trip" ? 2 : 1);
 
   function swap() {
     setOrigin(destination);
@@ -267,9 +273,21 @@ export function SearchControls({
         </div>
         <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
           Google Flights needs exact dates, so each search samples a few across
-          your window — more dates gets you closer to the true cheapest.
-          Estimated cost: ≈{depth * (tripType === "round-trip" ? 2 : 1)} credits
-          (free on the demo provider).
+          your window — more dates gets you closer to the true cheapest.{" "}
+          {chargeable ? (
+            <>
+              Estimated cost ≈{estimatedCredits} credit
+              {estimatedCredits === 1 ? "" : "s"} · {creditsRemaining} left this month.
+              {estimatedCredits > creditsRemaining && (
+                <span className="text-amber-600 dark:text-amber-400">
+                  {" "}
+                  Not enough credits for this depth.
+                </span>
+              )}
+            </>
+          ) : (
+            <>The demo provider is free.</>
+          )}
         </p>
       </fieldset>
 

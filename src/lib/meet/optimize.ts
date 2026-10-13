@@ -1,35 +1,40 @@
 import { getAirport } from "@/lib/domain/airports";
-import { addDays } from "@/lib/domain/date-utils";
+import { addDays, nightsBetween } from "@/lib/domain/date-utils";
 import type { DateWindow } from "@/lib/domain/date-window";
+import { getFlightProvider } from "@/lib/flights";
 import type { DestinationDeal } from "@/lib/flights/types";
 import { getEverywhere, getOffers } from "@/lib/gateway/flights";
+import { checkCallBudget } from "@/lib/gateway/meter";
 import type { MeetLeg, MeetParticipant, MeetRequest, MeetResult } from "./types";
 
 /**
- * The Meet optimizer.
+ * The Meet optimizer — credit-bounded.
  *
  * "N people from N origins — where should we all go?"
  *
- *   1. Fan `everywhere` out over each origin (cached) to get the destinations
- *      each person could reach, with a sample price and dates.
- *   2. Intersect those destination sets to find places everyone can reach.
+ *   1. Fan `everywhere` out over each origin (N credits, cached).
+ *   2. Intersect those destination sets.
  *   3. Shortlist by the naive sum of each person's cheapest fare.
- *   4. For each shortlisted destination, align everyone onto a common trip:
- *      evaluate a handful of anchor departure dates (drawn from the origins'
- *      own cheapest dates) and price each participant for the same fixed
- *      `togetherNights`. The cheapest anchor wins, and — because everyone
- *      travels the same dates — the shared overlap window is exact.
+ *   4. For the shortlist, align everyone onto a shared trip: evaluate a small
+ *      number of anchor dates (derived from the origins' own cheapest dates) and
+ *      price each traveller for the same `togetherNights`.
  *
- * Call volume is bounded (`MAX_CANDIDATES × MAX_ANCHORS × participants`), and
- * every sub-search is cached through the gateway, so repeated planning is cheap.
+ * Cost is bounded to `N + candidates × anchors × N × (round-trip ? 2 : 1)`
+ * credits. If the remaining monthly budget can't cover the aligned re-pricing,
+ * Meet degrades to a **sample** result built from the cached `everywhere` data,
+ * costing nothing extra.
  */
 
-const MAX_CANDIDATES = 6;
-const MAX_ANCHORS = 4;
+const MAX_CANDIDATES = 3;
 
 function meetTtl(): number {
   const raw = Number(process.env.MEET_CACHE_TTL_SECONDS);
   return Number.isFinite(raw) && raw >= 0 ? raw : 1800;
+}
+
+function maxAnchors(): number {
+  const raw = Number(process.env.MEET_ANCHORS);
+  return Number.isFinite(raw) && raw > 0 ? Math.min(3, raw) : 1;
 }
 
 function pairWindow(anchor: string, request: MeetRequest): DateWindow {
@@ -81,35 +86,135 @@ async function priceLeg(
   };
 }
 
-/** Candidate departure dates everyone could plausibly share. */
 function anchorDates(
   destination: string,
   maps: Map<string, DestinationDeal>[],
   request: MeetRequest,
 ): string[] {
   const { window, togetherNights, tripType } = request;
-  const fitsInWindow = (anchor: string): boolean => {
+  const fits = (anchor: string): boolean => {
     if (anchor < window.departFrom) return false;
-    if (tripType === "round-trip") {
-      return addDays(anchor, togetherNights) <= window.departTo;
-    }
-    return anchor <= window.departTo;
+    return tripType === "round-trip"
+      ? addDays(anchor, togetherNights) <= window.departTo
+      : anchor <= window.departTo;
   };
 
-  const anchors = new Set<string>();
-  if (fitsInWindow(window.departFrom)) anchors.add(window.departFrom);
+  const set = new Set<string>();
   for (const map of maps) {
     const deal = map.get(destination);
-    if (deal && fitsInWindow(deal.departDate)) anchors.add(deal.departDate);
+    if (deal?.departDate && fits(deal.departDate)) set.add(deal.departDate);
   }
+  if (set.size === 0 && fits(window.departFrom)) set.add(window.departFrom);
 
-  return [...anchors].sort().slice(0, MAX_ANCHORS);
+  const sorted = [...set].sort();
+  const target = maxAnchors();
+  if (sorted.length <= target) return sorted;
+  if (target === 1) return [sorted[Math.floor(sorted.length / 2)]];
+
+  const step = (sorted.length - 1) / (target - 1);
+  return [...new Set(Array.from({ length: target }, (_, i) => sorted[Math.round(i * step)]))];
 }
 
-export async function optimizeMeet(request: MeetRequest): Promise<MeetResult[]> {
+function assemble(
+  destination: string,
+  legs: MeetLeg[],
+  togetherFrom: string,
+  request: MeetRequest,
+  approximate: boolean,
+): MeetResult {
+  const airport = getAirport(destination);
+  const nights = request.tripType === "round-trip" ? request.togetherNights : 0;
+  return {
+    destination,
+    city: airport?.city ?? destination,
+    country: airport?.country ?? "",
+    total: {
+      amountMinor: legs.reduce((sum, leg) => sum + leg.price.amountMinor, 0),
+      currency: request.currency,
+    },
+    legs,
+    togetherFrom,
+    togetherTo: addDays(togetherFrom, nights),
+    togetherNights: nights,
+    approximate,
+  };
+}
+
+/** Sample result — from cached `everywhere` data, no extra credits. */
+function sampleResult(
+  destination: string,
+  maps: Map<string, DestinationDeal>[],
+  request: MeetRequest,
+): MeetResult | null {
+  const legs: MeetLeg[] = [];
+  for (let i = 0; i < request.participants.length; i++) {
+    const deal = maps[i].get(destination);
+    if (!deal) return null;
+    legs.push({
+      label: request.participants[i].label,
+      origin: request.participants[i].origin,
+      price: deal.price,
+      departDate: deal.departDate,
+      returnDate: deal.returnDate,
+      carrierCode: "—",
+      carrierName: "Sample dates",
+      stops: deal.stops,
+      durationMinutes: deal.durationMinutes,
+    });
+  }
+
+  const departures = legs.map((leg) => leg.departDate).filter(Boolean).sort();
+  const returns = legs
+    .map((leg) => leg.returnDate)
+    .filter((value): value is string => Boolean(value))
+    .sort();
+
+  const from = departures.at(-1) ?? request.window.departFrom;
+  const to = returns[0] ?? from;
+  const nights =
+    request.tripType === "round-trip"
+      ? Math.max(0, nightsBetween(from, to))
+      : 0;
+
+  return assemble(destination, legs, from, request, true);
+}
+
+/** Precise result — aligned re-pricing of each traveller. */
+async function preciseResult(
+  destination: string,
+  maps: Map<string, DestinationDeal>[],
+  request: MeetRequest,
+): Promise<MeetResult | null> {
+  const anchors = anchorDates(destination, maps, request);
+  let best: { legs: MeetLeg[]; anchor: string; total: number } | null = null;
+
+  for (const anchor of anchors) {
+    const legs = await Promise.all(
+      request.participants.map((participant) =>
+        priceLeg(participant, destination, anchor, request),
+      ),
+    );
+    if (legs.some((leg) => leg === null)) continue;
+
+    const priced = legs as MeetLeg[];
+    const total = priced.reduce((sum, leg) => sum + leg.price.amountMinor, 0);
+    if (!best || total < best.total) best = { legs: priced, anchor, total };
+  }
+
+  if (!best) return null;
+  return assemble(destination, best.legs, best.anchor, request, false);
+}
+
+export async function optimizeMeet(
+  request: MeetRequest,
+  options: { maxCredits?: number } = {},
+): Promise<MeetResult[]> {
   if (request.participants.length < 2) return [];
 
-  // 1. Reachable destinations per origin (cached fan-out).
+  const count = request.participants.length;
+  const perLeg = request.tripType === "round-trip" ? 2 : 1;
+
+  // 1. Reachable destinations per origin (N credits, cached).
   const perOrigin = await Promise.all(
     request.participants.map(async (participant) => {
       const { data } = await getEverywhere(
@@ -128,62 +233,40 @@ export async function optimizeMeet(request: MeetRequest): Promise<MeetResult[]> 
     }),
   );
 
-  // 2. Intersect: only destinations everyone can reach.
+  // 2. Intersect.
   const [first, ...rest] = perOrigin;
   const common = [...first.keys()].filter((destination) =>
     rest.every((map) => map.has(destination)),
   );
   if (common.length === 0) return [];
 
-  // 3. Shortlist by naive total cost.
-  const naive = common
+  // 3. Shortlist by naive total.
+  const shortlist = common
     .map((destination) => ({
       destination,
       total: perOrigin.reduce(
-        (sum, map) => sum + (map.get(destination)?.price.amountMinor ?? 0),
+        (sum, map) => sum + (map.get(destination)?.price.amountMinor ?? Number.MAX_SAFE_INTEGER),
         0,
       ),
     }))
     .sort((a, b) => a.total - b.total)
     .slice(0, MAX_CANDIDATES);
 
-  // 4. Align each candidate onto a shared trip window.
+  // Can we afford the aligned re-pricing?
+  const provider = await getFlightProvider();
+  const perDestinationCost = maxAnchors() * count * perLeg;
+  let affordable = true;
+  if (provider.id !== "mock") {
+    const remaining = options.maxCredits ?? (await checkCallBudget()).remaining;
+    affordable = remaining >= shortlist.length * perDestinationCost;
+  }
+
   const results: MeetResult[] = [];
-  for (const { destination } of naive) {
-    const anchors = anchorDates(destination, perOrigin, request);
-
-    let best: { legs: MeetLeg[]; anchor: string; total: number } | null = null;
-
-    for (const anchor of anchors) {
-      const legs = await Promise.all(
-        request.participants.map((participant) =>
-          priceLeg(participant, destination, anchor, request),
-        ),
-      );
-      if (legs.some((leg) => leg === null)) continue;
-
-      const priced = legs as MeetLeg[];
-      const total = priced.reduce((sum, leg) => sum + leg.price.amountMinor, 0);
-      if (!best || total < best.total) {
-        best = { legs: priced, anchor, total };
-      }
-    }
-
-    if (!best) continue;
-
-    const airport = getAirport(destination);
-    const nights = request.tripType === "round-trip" ? request.togetherNights : 0;
-
-    results.push({
-      destination,
-      city: airport?.city ?? destination,
-      country: airport?.country ?? "",
-      total: { amountMinor: best.total, currency: request.currency },
-      legs: best.legs,
-      togetherFrom: best.anchor,
-      togetherTo: addDays(best.anchor, nights),
-      togetherNights: nights,
-    });
+  for (const { destination } of shortlist) {
+    const result = affordable
+      ? await preciseResult(destination, perOrigin, request)
+      : sampleResult(destination, perOrigin, request);
+    if (result) results.push(result);
   }
 
   return results

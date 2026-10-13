@@ -1,10 +1,8 @@
-import { getFlightProvider } from "@/lib/flights";
+import { getFlightProvider, type FlightProvider } from "@/lib/flights";
 import type {
-  CalendarDay,
   DestinationDeal,
   EverywhereSpec,
   Itinerary,
-  PriceCalendarSpec,
   SearchSpec,
 } from "@/lib/flights/types";
 import { cacheGet, cacheKey, cacheSet } from "./cache";
@@ -14,13 +12,12 @@ import { recordUsage } from "./meter";
  * The provider gateway.
  *
  * Every feature reads flights through here. It layers caching and usage
- * metering over the `FlightProvider` so that:
+ * metering (in credits) over the `FlightProvider` so that:
  *   - repeated Explore searches reuse a cached fan-out (keeps quota intact)
  *   - monitoring always asks for fresh data (a cached price defeats the point)
- *   - every real upstream call is recorded for quota / pay-as-you-go
+ *   - every real upstream request is recorded for quota / pay-as-you-go
  *
- * Swapping in a commercial provider (Air Scraper, SerpApi, ...) happens in
- * `src/lib/flights/index.ts`; nothing here changes.
+ * Swapping provider (mock ⇄ SerpApi) happens in `src/lib/flights/index.ts`.
  */
 
 export type Sourced<T> = {
@@ -44,59 +41,69 @@ function ttlFromEnv(name: string, fallback: number): number {
 
 export const cacheTtls = {
   everywhere: () => ttlFromEnv("EXPLORE_CACHE_TTL_SECONDS", 6 * 3600),
-  priceCalendar: () => ttlFromEnv("CALENDAR_CACHE_TTL_SECONDS", 6 * 3600),
 };
 
 async function sourced<T>(
-  endpoint: string,
-  params: unknown,
-  ttlSeconds: number,
-  fresh: boolean,
-  call: () => Promise<T>,
+  provider: FlightProvider,
+  input: {
+    endpoint: string;
+    params: unknown;
+    ttlSeconds: number;
+    fresh: boolean;
+    credits: number;
+    call: (provider: FlightProvider) => Promise<T>;
+  },
 ): Promise<Sourced<T>> {
-  const provider = getFlightProvider();
-  const key = cacheKey(provider.id, endpoint, params);
+  const key = cacheKey(provider.id, input.endpoint, input.params);
 
-  if (ttlSeconds > 0 && !fresh) {
+  if (input.ttlSeconds > 0 && !input.fresh) {
     const hit = await cacheGet<T>(key);
     if (hit) return { data: hit.data, source: "cache", at: hit.at };
   }
 
   const at = new Date();
-  const data = await call();
-  await recordUsage({ provider: provider.id, endpoint, costMicros: 0, ok: true });
-  if (ttlSeconds > 0) await cacheSet(key, provider.id, data, ttlSeconds, at);
+  const data = await input.call(provider);
+  await recordUsage({
+    provider: provider.id,
+    endpoint: input.endpoint,
+    credits: input.credits,
+    ok: true,
+  });
+
+  if (input.ttlSeconds > 0) {
+    await cacheSet(key, provider.id, data, input.ttlSeconds, at);
+  }
 
   return { data, source: "provider", at: at.toISOString() };
 }
 
-export function getEverywhere(
+export async function getEverywhere(
   spec: EverywhereSpec,
   opts: CallOptions = {},
 ): Promise<Sourced<DestinationDeal[]>> {
-  const ttlSeconds = opts.ttlSeconds ?? cacheTtls.everywhere();
-  return sourced("everywhere", spec, ttlSeconds, opts.fresh ?? false, () =>
-    getFlightProvider().everywhere(spec),
-  );
+  const provider = await getFlightProvider();
+  return sourced(provider, {
+    endpoint: "everywhere",
+    params: spec,
+    ttlSeconds: opts.ttlSeconds ?? cacheTtls.everywhere(),
+    fresh: opts.fresh ?? false,
+    credits: provider.credits.everywhere(spec),
+    call: (p) => p.everywhere(spec),
+  });
 }
 
-export function getOffers(
+export async function getOffers(
   spec: SearchSpec,
   opts: CallOptions = {},
 ): Promise<Sourced<Itinerary[]>> {
+  const provider = await getFlightProvider();
   // Monitoring wants fresh data, so offers default to no caching.
-  const ttlSeconds = opts.ttlSeconds ?? 0;
-  return sourced("searchOffers", spec, ttlSeconds, opts.fresh ?? false, () =>
-    getFlightProvider().searchOffers(spec),
-  );
-}
-
-export function getPriceCalendar(
-  spec: PriceCalendarSpec,
-  opts: CallOptions = {},
-): Promise<Sourced<CalendarDay[]>> {
-  const ttlSeconds = opts.ttlSeconds ?? cacheTtls.priceCalendar();
-  return sourced("priceCalendar", spec, ttlSeconds, opts.fresh ?? false, () =>
-    getFlightProvider().priceCalendar(spec),
-  );
+  return sourced(provider, {
+    endpoint: "searchOffers",
+    params: spec,
+    ttlSeconds: opts.ttlSeconds ?? 0,
+    fresh: opts.fresh ?? false,
+    credits: provider.credits.search(spec),
+    call: (p) => p.searchOffers(spec),
+  });
 }

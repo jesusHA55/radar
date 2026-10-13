@@ -4,13 +4,11 @@ import type { CabinClass } from "@/lib/domain/trip";
 import { hashRange, hashString, seededRandom } from "@/lib/utils/hash";
 import {
   toMoney,
-  type CalendarDay,
   type DestinationDeal,
   type EverywhereSpec,
   type FlightProvider,
   type FlightSegment,
   type Itinerary,
-  type PriceCalendarSpec,
   type SearchSpec,
 } from "./types";
 
@@ -277,6 +275,8 @@ function buildSegments(
 export class MockFlightProvider implements FlightProvider {
   readonly id = "mock";
   readonly label = "Mock provider (offline demo data)";
+  /** Offline demo data is free. */
+  readonly credits = { search: () => 0, everywhere: () => 0 };
 
   async searchOffers(spec: SearchSpec): Promise<Itinerary[]> {
     const { origin, destination, tripType, window, cabin, adults, currency } =
@@ -331,38 +331,6 @@ export class MockFlightProvider implements FlightProvider {
         ),
         provider: this.id,
       } satisfies Itinerary;
-    });
-  }
-
-  async priceCalendar(spec: PriceCalendarSpec): Promise<CalendarDay[]> {
-    const { origin, destination, tripType, window, cabin, adults, currency } =
-      spec;
-    const distanceKm = routeKm(origin, destination);
-    if (distanceKm === null) return [];
-
-    return eachDate(window.departFrom, window.departTo).map((date) => {
-      const priceMinor =
-        tripType === "one-way"
-          ? quoteOneWayMinor(
-              distanceKm,
-              origin,
-              destination,
-              date,
-              cabin,
-              adults,
-              currency,
-            )
-          : quoteRoundTripMinor(
-              distanceKm,
-              origin,
-              destination,
-              date,
-              addDays(date, window.minNights ?? 5),
-              cabin,
-              adults,
-              currency,
-            );
-      return { date, price: toMoney(priceMinor / 100, currency) } satisfies CalendarDay;
     });
   }
 

@@ -4,8 +4,9 @@
 fly from an airport, and find the fairest meeting point for a group — all
 bounded by a shared **flexible-dates** window.
 
-> Status: all three features work end-to-end on deterministic demo data, behind
-> invite-only auth. Web push is the only outstanding item.
+> Status: all three features work end-to-end — on deterministic demo data by
+> default, or **live Google Flights (SerpApi)** via a runtime toggle — behind
+> invite-only auth. Web push is the outstanding item.
 
 ---
 
@@ -70,24 +71,37 @@ The obvious API for this product — Amadeus Self-Service, which shipped dedicat
 SerpApi/Google Flights, Duffel, Kiwi) all cost money, and their free tiers are
 far too small to run real monitoring.
 
-So Radar is built **mock-first**: every feature is developed and demoed against a
-deterministic offline provider (`src/lib/flights/mock.ts`), and a real provider
-plugs in behind the same `FlightProvider` interface with a config change
-(`FLIGHT_PROVIDER=airscraper`). Zero cost today, no rewrite tomorrow.
+Radar ships **mock-first**: every feature works against a deterministic offline
+provider (`src/lib/flights/mock.ts`), and you can switch to **live data** —
+SerpApi (Google Flights) — at runtime from `/settings`. The adapter implements
+the same `FlightProvider` interface, so no feature code changes.
 
 ```
 FlightProvider
-  searchOffers(spec)       → specific route over a window
-  priceCalendar(spec)      → per-day prices
-  everywhere(spec)         → cheapest destinations from an origin
-                             (powers Explore, and Meet)
+  searchOffers(spec)   → specific route (SerpApi: 1 credit one-way, 2 round-trip)
+  everywhere(spec)     → cheapest destinations from an origin (1 credit)
+                         (powers Explore, and Meet)
 ```
+
+### Flight data providers
+
+| Provider | Cost | Notes |
+| --- | --- | --- |
+| `mock` (default) | **0 credits** | Deterministic, offline demo data |
+| `serpapi` | **1 credit/request** | Live Google Flights; round-trip search = 2 |
+
+Switch at runtime in **`/settings`** (persisted in `app_settings`), or via
+`FLIGHT_PROVIDER`. Every upstream request is metered as a **credit**; the monitor
+worker and Meet both refuse to exceed `MONTHLY_CALL_BUDGET` (default **250** — the
+SerpApi free tier). Round-trips take a second `departure_token` request, so they
+cost 2. Because Google Flights needs concrete dates, a flexible window is
+date-sampled (`SERPAPI_DATE_SAMPLES`, default 1).
 
 ### The provider gateway
 
 Every feature reads flights through `src/lib/gateway/`, which layers a
-Postgres-backed response cache and usage metering over the provider. Cache hits
-never reach upstream, so they never consume the quota budget; monitoring always
+Postgres-backed response cache and credit metering over the provider. Cache hits
+never reach upstream, so they never consume the credit budget; monitoring always
 requests fresh data (a cached price defeats the point). This is the foundation
 for quota-aware polling and pay-as-you-go billing.
 
@@ -141,8 +155,8 @@ src/
   components/               UI (calendar + feature forms, cards, sparkline)
   lib/
     domain/                 DateWindow, airports, trip enums, explore ranking
-    flights/                FlightProvider interface + mock + factory
-    gateway/                caching + usage metering over the provider
+    flights/                FlightProvider + mock + SerpApi adapter/mappers
+    gateway/                caching + credit metering over the provider
     monitor/                engine, queries, form parsing, CLI worker
     meet/                   multi-origin optimizer + param parsing
     saved/                  saved-search queries + actions
@@ -163,7 +177,7 @@ override.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `FLIGHT_PROVIDER` | `mock` | Flight data source (`mock`, later `airscraper`/`serpapi`) |
+| `FLIGHT_PROVIDER` | `mock` | Default flight data source (`mock` or `serpapi`) |
 | `DATABASE_URL` | `postgres://postgres:postgres@127.0.0.1:5432/postgres` | Postgres connection string |
 | `DATABASE_POOL_MAX` | `2` | Connection pool size |
 | `POSTGRES_DATA_DIR` | `.data/pg` | Local embedded-cluster data directory |
@@ -172,11 +186,15 @@ override.
 | `RESEND_API_KEY` | — | Enables real email; unset ⇒ console fallback |
 | `ALERT_FROM_EMAIL` | — | From address for alerts + sign-in links |
 | `CRON_SECRET` | — | Required to call `POST /api/cron/poll` in production |
-| `MONTHLY_CALL_BUDGET` | `10000` | Monthly upstream call cap (quota-aware polling) |
+| `MONTHLY_CALL_BUDGET` | `250` | Monthly credit cap (SerpApi free tier) |
 | `ALERT_COOLDOWN_MINUTES` | `720` | Minimum minutes between alerts for a watch |
+| `SERPAPI_API_KEY` | — | Required when the provider is `serpapi` |
+| `SERPAPI_GL` / `SERPAPI_HL` / `SERPAPI_CURRENCY` | `de` / `en` / `EUR` | SerpApi locale + price currency |
+| `SERPAPI_DATE_SAMPLES` | `1` | Dates sampled across a flexible window |
+| `SERPAPI_ROUNDTRIP_DEPTH` | `1` | Return legs resolved per round-trip search |
 | `EXPLORE_CACHE_TTL_SECONDS` | `21600` | Explore `everywhere` cache lifetime |
-| `CALENDAR_CACHE_TTL_SECONDS` | `21600` | Price-calendar cache lifetime |
 | `MEET_CACHE_TTL_SECONDS` | `1800` | Meet leg-search cache lifetime |
+| `MEET_ANCHORS` | `1` | Aligned re-pricing anchors per Meet destination |
 
 ## Scripts
 
@@ -190,6 +208,7 @@ override.
 | `npm run db:setup` | Migrate + seed against `DATABASE_URL` |
 | `npm run db:generate` | Generate SQL migrations from the schema |
 | `npm run poll` / `poll:loop` | Run the monitoring worker once / on a loop |
+| `npm run test:mappers` | Verify SerpApi response mapping against fixtures |
 
 ## Data & persistence
 
@@ -221,9 +240,10 @@ npm run db:setup    # migrate + seed against DATABASE_URL
 | **M3** | Meet: multi-origin optimizer with a shared window ✅ |
 | **M4** | (folded into M2) provider gateway caching + metering ✅ |
 | **M5** | Invite-only auth, saved searches, quota dashboard ✅ |
-| **M6** | Web push alerts; switch `FLIGHT_PROVIDER` to a real adapter |
+| **M6** | Live SerpApi provider, credit budget, runtime provider toggle ✅ |
+| **M7** | Web push alerts |
 
-### Planned: web push (M6)
+### Planned: web push (M7)
 
 Web push will add a third notification channel alongside email and the
 development console log. It will need a VAPID key pair and a service worker:

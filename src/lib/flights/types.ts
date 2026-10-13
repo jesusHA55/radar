@@ -1,10 +1,9 @@
 /**
  * Provider-agnostic flight domain types.
  *
- * Every data source (the mock, Air Scraper, SerpApi, ...) normalizes its
- * response into these shapes, so the features above it never depend on a
- * specific vendor. Prices are integers in minor units (cents) to avoid
- * floating-point drift.
+ * Every data source (the mock, SerpApi, ...) normalizes its response into these
+ * shapes, so the features above never depend on a specific vendor. Prices are
+ * integers in minor units (cents) to avoid floating-point drift.
  */
 
 import type { DateWindow } from "@/lib/domain/date-window";
@@ -30,6 +29,9 @@ export type FlightSegment = {
   durationMinutes: number;
 };
 
+/** Google's own "is this a good price" signal, when the provider offers it. */
+export type PriceLevel = "low" | "typical" | "high";
+
 export type Itinerary = {
   id: string;
   origin: string;
@@ -46,9 +48,12 @@ export type Itinerary = {
   /** Total travel time of the outbound leg, in minutes. */
   durationMinutes: number;
   segments: FlightSegment[];
+  /** Return segments, for round-trips. */
+  returnSegments?: FlightSegment[];
   provider: string;
-  /** Optional deep link to book/verify the fare. */
+  /** Optional deep link to verify/book the fare. */
   deepLinkUrl?: string;
+  priceLevel?: PriceLevel;
 };
 
 export type SearchSpec = {
@@ -59,21 +64,6 @@ export type SearchSpec = {
   cabin: CabinClass;
   adults: number;
   currency: string;
-};
-
-export type PriceCalendarSpec = {
-  origin: string;
-  destination: string;
-  tripType: TripType;
-  window: DateWindow;
-  cabin: CabinClass;
-  adults: number;
-  currency: string;
-};
-
-export type CalendarDay = {
-  date: string;
-  price: Money;
 };
 
 export type EverywhereSpec = {
@@ -98,21 +88,34 @@ export type DestinationDeal = {
   distanceKm: number;
   durationMinutes: number;
   stops: number;
+  /** When the provider reports a deal, how far below average it is. */
+  discountPercent?: number;
+  averagePriceMinor?: number;
+  deepLinkUrl?: string;
+};
+
+/**
+ * How many upstream requests (credits) each operation consumes. The mock is
+ * free; SerpApi charges 1 credit per request — and a round-trip search needs a
+ * second follow-up request, so it costs 2.
+ */
+export type ProviderCredits = {
+  search: (spec: SearchSpec) => number;
+  everywhere: (spec: EverywhereSpec) => number;
 };
 
 /**
  * The contract every flight data source implements.
  *
- * `everywhere` is the primitive that powers the Explore feature and, by
- * extension, the Meet feature (which fans `everywhere` out over several
- * origins and intersects the results).
+ * `everywhere` powers the Explore feature and, by extension, the Meet optimizer
+ * (which fans `everywhere` out over several origins and intersects the results).
  */
 export interface FlightProvider {
   readonly id: string;
   readonly label: string;
+  readonly credits: ProviderCredits;
 
   searchOffers(spec: SearchSpec): Promise<Itinerary[]>;
-  priceCalendar(spec: PriceCalendarSpec): Promise<CalendarDay[]>;
   everywhere(spec: EverywhereSpec): Promise<DestinationDeal[]>;
 }
 

@@ -2,7 +2,10 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 
+import { loadLocalEnv } from "@/lib/utils/load-env";
 import { databaseUrl } from "./config";
+
+loadLocalEnv();
 
 /**
  * Applies the SQL migrations in ./drizzle to the configured database.

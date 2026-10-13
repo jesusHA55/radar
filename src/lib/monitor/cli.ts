@@ -1,6 +1,9 @@
 import { closeDatabase } from "@/db/client";
+import { loadLocalEnv } from "@/lib/utils/load-env";
 
 import { runDueWatches } from "./engine";
+
+loadLocalEnv();
 
 /**
  * Monitor worker entry point.
@@ -31,7 +34,7 @@ async function once(): Promise<void> {
   const summary = await runDueWatches({ force: process.env.FORCE === "1" });
   console.log(
     `poll: checked=${summary.checked} alerted=${summary.alerted} cooldown=${summary.cooldown} ` +
-      `errors=${summary.errors} budget=${summary.budget.calls}/${summary.budget.budget}`,
+      `errors=${summary.errors} credits=${summary.budget.credits}/${summary.budget.budget}`,
   );
   for (const result of summary.results) {
     console.log(formatResult(result));

@@ -172,6 +172,8 @@ export const usageEvents = pgTable(
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
     /** Estimated cost in micro-USD (integer, avoids float drift). */
     estimatedCostMicros: integer("estimated_cost_micros").notNull().default(0),
+    /** Upstream requests consumed by this operation (0 for the mock). */
+    credits: integer("credits").notNull().default(0),
     ok: boolean("ok").notNull().default(true),
   },
   (table) => [index("usage_events_provider_idx").on(table.provider, table.occurredAt)],
@@ -248,3 +250,14 @@ export const savedSearches = pgTable(
   },
   (table) => [index("saved_searches_owner_idx").on(table.ownerId, table.createdAt)],
 );
+
+/* ------------------------------------------------------------------ */
+/* App settings (global key/value)                                     */
+/* ------------------------------------------------------------------ */
+
+/** Small global settings store — currently just the active flight provider. */
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

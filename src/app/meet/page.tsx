@@ -155,6 +155,11 @@ function MeetResultCard({ result, rank }: { result: MeetResult; rank: number }) 
             ) : (
               <> · travelling {formatDate(result.togetherFrom)}</>
             )}
+            {result.approximate && (
+              <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                approximate
+              </span>
+            )}
           </p>
         </div>
         <div className="text-right">

@@ -5,6 +5,9 @@ import { airports, invites, priceObservations, users, watches } from "@/db/schem
 import { AIRPORTS } from "@/lib/domain/airports";
 import { defaultDateWindow, toISODate } from "@/lib/domain/date-window";
 import { computeQuote, marketMultiplier } from "@/lib/monitor/engine";
+import { loadLocalEnv } from "@/lib/utils/load-env";
+
+loadLocalEnv();
 
 /**
  * Seeds reference airports, the local user, and a couple of sample watches with

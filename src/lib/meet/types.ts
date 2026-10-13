@@ -45,6 +45,8 @@ export type MeetResult = {
   togetherFrom: string;
   togetherTo: string;
   togetherNights: number;
+  /** True when derived from cached `everywhere` samples (no extra credits). */
+  approximate?: boolean;
 };
 
 export const MEET_LIMITS = [5, 10, 25] as const;

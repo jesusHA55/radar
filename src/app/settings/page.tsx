@@ -2,6 +2,7 @@ import { lt, sql } from "drizzle-orm";
 import { connection } from "next/server";
 import { Suspense } from "react";
 
+import { setProviderAction } from "@/app/settings/actions";
 import { requireCurrentUser } from "@/lib/auth/current-user";
 import { db } from "@/db/client";
 import {
@@ -13,18 +14,37 @@ import {
   users,
   watches,
 } from "@/db/schema";
-import { callBudget, monthUsage, usageByProvider } from "@/lib/gateway/meter";
+import { resolveFlightProviderId } from "@/lib/flights";
+import { creditBudget, monthUsage, usageByProvider } from "@/lib/gateway/meter";
 
 export const metadata = { title: "Settings — Radar" };
+
+const PROVIDERS = [
+  {
+    id: "mock",
+    label: "Mock — offline demo data",
+    detail: "Deterministic, no network, costs 0 credits.",
+  },
+  {
+    id: "serpapi",
+    label: "SerpApi — Google Flights",
+    detail: "Live data. 1 credit per request, 2 per round-trip search.",
+  },
+] as const;
 
 export default function SettingsPage() {
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
       <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-        Your account and how much of the flight-data quota is being used.
+        Your account, the active flight-data provider, and how much of the quota
+        you have used.
       </p>
-      <Suspense fallback={<div className="mt-8 h-64 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" />}>
+      <Suspense
+        fallback={
+          <div className="mt-8 h-64 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" />
+        }
+      >
         <SettingsContent />
       </Suspense>
     </main>
@@ -35,33 +55,35 @@ async function SettingsContent() {
   await connection();
   const user = await requireCurrentUser();
 
-  const [usage, budget, byProvider] = await Promise.all([
+  const [providerId, usage, budget, byProvider] = await Promise.all([
+    resolveFlightProviderId(),
     monthUsage(),
-    Promise.resolve(callBudget()),
+    Promise.resolve(creditBudget()),
     usageByProvider(),
   ]);
 
-  const [
-    watchCount,
-    observationCount,
-    alertCount,
-    savedCount,
-    userCount,
-    sessionCount,
-    cacheActive,
-    cacheExpired,
-  ] = await Promise.all([
+  const counts = await Promise.all([
     db.select({ n: sql<number>`count(*)::int` }).from(watches),
     db.select({ n: sql<number>`count(*)::int` }).from(priceObservations),
     db.select({ n: sql<number>`count(*)::int` }).from(alerts),
     db.select({ n: sql<number>`count(*)::int` }).from(savedSearches),
     db.select({ n: sql<number>`count(*)::int` }).from(users),
     db.select({ n: sql<number>`count(*)::int` }).from(sessions),
-    db.select({ n: sql<number>`count(*)::int` }).from(priceCache).where(sql`${priceCache.expiresAt} > now()`),
-    db.select({ n: sql<number>`count(*)::int` }).from(priceCache).where(lt(priceCache.expiresAt, new Date())),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(priceCache)
+      .where(sql`${priceCache.expiresAt} > now()`),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(priceCache)
+      .where(lt(priceCache.expiresAt, new Date())),
   ]).then((rows) => rows.map((r) => r[0]?.n ?? 0));
 
-  const pct = budget > 0 ? Math.min(100, (usage.calls / budget) * 100) : 0;
+  const [watchCount, observationCount, alertCount, savedCount, userCount, sessionCount, cacheActive, cacheExpired] =
+    counts;
+
+  const pct = budget > 0 ? Math.min(100, (usage.credits / budget) * 100) : 0;
+  const serpConfigured = Boolean(process.env.SERPAPI_API_KEY?.trim());
 
   return (
     <div className="mt-8 space-y-6">
@@ -74,12 +96,60 @@ async function SettingsContent() {
       </section>
 
       <section className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
+        <h2 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+          Flight data provider
+        </h2>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          Switch between deterministic demo data and live SerpApi (Google Flights)
+          results. Applies immediately — no restart.
+        </p>
+        <form action={setProviderAction} className="mt-4 space-y-3">
+          {PROVIDERS.map((provider) => (
+            <label
+              key={provider.id}
+              className="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-200 p-3 has-[:checked]:border-zinc-900 dark:border-zinc-800 dark:has-[:checked]:border-zinc-400"
+            >
+              <input
+                type="radio"
+                name="provider"
+                value={provider.id}
+                defaultChecked={providerId === provider.id}
+                className="mt-1 h-4 w-4"
+              />
+              <span>
+                <span className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                  {provider.label}
+                </span>
+                <span className="block text-xs text-zinc-500 dark:text-zinc-400">
+                  {provider.detail}
+                </span>
+              </span>
+            </label>
+          ))}
+
+          {!serpConfigured && (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+              <code>SERPAPI_API_KEY</code> is not set — selecting SerpApi will fail
+              until you add it to <code>.env.local</code>.
+            </p>
+          )}
+
+          <button
+            type="submit"
+            className="inline-flex h-9 items-center rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+          >
+            Save provider
+          </button>
+        </form>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
         <div className="flex items-baseline justify-between">
           <h2 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            Provider quota this month
+            Provider credits this month
           </h2>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            {usage.calls.toLocaleString()} / {budget.toLocaleString()} calls
+            {usage.credits.toLocaleString()} / {budget.toLocaleString()} credits
           </p>
         </div>
         <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
@@ -89,7 +159,7 @@ async function SettingsContent() {
           />
         </div>
         <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-          {Math.max(0, budget - usage.calls).toLocaleString()} calls remaining ·
+          {Math.max(0, budget - usage.credits).toLocaleString()} credits remaining ·
           ${(usage.costMicros / 1_000_000).toFixed(2)} estimated cost
         </p>
 
@@ -98,7 +168,8 @@ async function SettingsContent() {
             <thead>
               <tr className="text-left text-xs text-zinc-500 dark:text-zinc-400">
                 <th className="py-1 font-medium">Provider</th>
-                <th className="py-1 text-right font-medium">Calls</th>
+                <th className="py-1 text-right font-medium">Requests</th>
+                <th className="py-1 text-right font-medium">Credits</th>
                 <th className="py-1 text-right font-medium">Cost</th>
               </tr>
             </thead>
@@ -108,6 +179,9 @@ async function SettingsContent() {
                   <td className="py-1.5 text-zinc-700 dark:text-zinc-300">{row.provider}</td>
                   <td className="py-1.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
                     {row.calls.toLocaleString()}
+                  </td>
+                  <td className="py-1.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
+                    {row.credits.toLocaleString()}
                   </td>
                   <td className="py-1.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
                     ${(row.costMicros / 1_000_000).toFixed(2)}

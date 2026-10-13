@@ -1,37 +1,64 @@
+import { eq } from "drizzle-orm";
+
+import { db } from "@/db/client";
+import { appSettings } from "@/db/schema";
 import { MockFlightProvider } from "./mock";
+import { SerpFlightProvider } from "./serp";
 import type { FlightProvider } from "./types";
 
 /**
  * Provider selection.
  *
- * `FLIGHT_PROVIDER=mock` (the default) keeps the app offline and free. Real
- * adapters (e.g. Air Scraper / SerpApi) plug in here behind the same interface
- * once you are ready to move off demo data — no feature code changes.
- *
- * Server-only by convention: never import this from a Client Component.
+ * The active provider is stored in the `app_settings` table so it can be
+ * toggled at runtime from `/settings`, with `FLIGHT_PROVIDER` as the fallback
+ * default. The resolved provider is cached briefly per process to avoid a DB
+ * round-trip on every call.
  */
 
-let cached: FlightProvider | null = null;
+export const FLIGHT_PROVIDERS = ["mock", "serpapi"] as const;
+export type FlightProviderId = (typeof FLIGHT_PROVIDERS)[number];
 
-export function getFlightProvider(): FlightProvider {
-  if (cached) return cached;
+const SETTING_KEY = "flight_provider";
+const CACHE_TTL_MS = 5_000;
 
-  const id = process.env.FLIGHT_PROVIDER ?? "mock";
+let cache: { at: number; provider: FlightProvider } | null = null;
 
-  switch (id) {
-    case "mock":
-      cached = new MockFlightProvider();
-      break;
-    // case "airscraper":
-    //   cached = new AirScraperFlightProvider({ apiKey: requireEnv("AIRSCRAPER_API_KEY") });
-    //   break;
-    default:
-      throw new Error(
-        `Unknown FLIGHT_PROVIDER "${id}". Supported: "mock".`,
-      );
-  }
+export function isFlightProviderId(value: string): value is FlightProviderId {
+  return (FLIGHT_PROVIDERS as readonly string[]).includes(value);
+}
 
-  return cached;
+export async function resolveFlightProviderId(): Promise<FlightProviderId> {
+  const [row] = await db
+    .select()
+    .from(appSettings)
+    .where(eq(appSettings.key, SETTING_KEY))
+    .limit(1);
+
+  const value = row?.value ?? process.env.FLIGHT_PROVIDER ?? "mock";
+  return isFlightProviderId(value) ? value : "mock";
+}
+
+function instantiate(id: FlightProviderId): FlightProvider {
+  return id === "serpapi" ? new SerpFlightProvider() : new MockFlightProvider();
+}
+
+export async function getFlightProvider(): Promise<FlightProvider> {
+  if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.provider;
+
+  const provider = instantiate(await resolveFlightProviderId());
+  cache = { at: Date.now(), provider };
+  return provider;
+}
+
+export async function setFlightProvider(id: FlightProviderId): Promise<void> {
+  await db
+    .insert(appSettings)
+    .values({ key: SETTING_KEY, value: id })
+    .onConflictDoUpdate({
+      target: appSettings.key,
+      set: { value: id, updatedAt: new Date() },
+    });
+  cache = null;
 }
 
 export type { FlightProvider } from "./types";

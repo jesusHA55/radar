@@ -1,0 +1,349 @@
+{
+  "best_flights": [
+    {
+      "flights": [
+        {
+          "departure_airport": {
+            "name": "Stuttgart Airport",
+            "id": "STR",
+            "time": "2026-11-15 22:05"
+          },
+          "arrival_airport": {
+            "name": "Josep Tarradellas Barcelona-El Prat Airport",
+            "id": "BCN",
+            "time": "2026-11-15 23:59"
+          },
+          "duration": 114,
+          "airplane": "Airbus A320",
+          "airline": "Vueling",
+          "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/VY.png",
+          "travel_class": "Economy",
+          "flight_number": "VY 1211",
+          "ticket_also_sold_by": [
+            "Iberia"
+          ],
+          "legroom": "29 in",
+          "extensions": [
+            "Below average legroom (29 in)",
+            "Wi-Fi for a fee",
+            "In-seat USB outlet",
+            "Stream media to your device",
+            "Carbon emissions estimate: 97 kg"
+          ]
+        }
+      ],
+      "total_duration": 114,
+      "carbon_emissions": {
+        "this_flight": 98000,
+        "typical_for_this_route": 94000,
+        "difference_percent": 4
+      },
+      "price": 128,
+      "type": "Round trip",
+      "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/VY.png",
+      "departure_token": "WyJDalJJZUZVNWJVOWtNM2d6ZGxWQlJEaEVWVUZDUnkwdExTMHRMUzB0TFc5NWNYY3hNa0ZCUVVGQlIzSk9YM0JOVFVsMVFtRkJFZ1pXV1RFeU1URWFDZ2orWXhBQ0dnTkZWVkk0SEhEbmJ3PT0iLFtbIlNUUiIsIjIwMjYtMTEtMTUiLCJCQ04iLG51bGwsIlZZIiwiMTIxMSJdXV0="
+    },
+    {
+      "flights": [
+        {
+          "departure_airport": {
+            "name": "Stuttgart Airport",
+            "id": "STR",
+            "time": "2026-11-15 09:15"
+          },
+          "arrival_airport": {
+            "name": "Josep Tarradellas Barcelona-El Prat Airport",
+            "id": "BCN",
+            "time": "2026-11-15 11:10"
+          },
+          "duration": 115,
+          "airplane": "Airbus A320",
+          "airline": "Vueling",
+          "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/VY.png",
+          "travel_class": "Economy",
+          "flight_number": "VY 1209",
+          "ticket_also_sold_by": [
+            "Iberia"
+          ],
+          "legroom": "29 in",
+          "extensions": [
+            "Below average legroom (29 in)",
+            "Wi-Fi for a fee",
+            "In-seat USB outlet",
+            "Stream media to your device",
+            "Carbon emissions estimate: 91 kg"
+          ]
+        }
+      ],
+      "total_duration": 115,
+      "carbon_emissions": {
+        "this_flight": 92000,
+        "typical_for_this_route": 94000,
+        "difference_percent": -2
+      },
+      "price": 164,
+      "type": "Round trip",
+      "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/VY.png",
+      "departure_token": "WyJDalJJZUZVNWJVOWtNM2d6ZGxWQlJEaEVWVUZDUnkwdExTMHRMUzB0TFc5NWNYY3hNa0ZCUVVGQlIzSk9YM0JOVFVsMVFtRkJFZ1pXV1RFeU1Ea2FDd2lPZ0FFUUFob0RSVlZTT0J4d29JOEIiLFtbIlNUUiIsIjIwMjYtMTEtMTUiLCJCQ04iLG51bGwsIlZZIiwiMTIwOSJdXV0="
+    }
+  ],
+  "other_flights": [],
+  "price_insights": {
+    "lowest_price": 128,
+    "price_level": "typical",
+    "typical_price_range": [
+      95,
+      165
+    ],
+    "price_history": [
+      [
+        1786572000,
+        113
+      ],
+      [
+        1786658400,
+        113
+      ],
+      [
+        1786744800,
+        113
+      ],
+      [
+        1786831200,
+        113
+      ],
+      [
+        1786917600,
+        113
+      ],
+      [
+        1787004000,
+        113
+      ],
+      [
+        1787090400,
+        116
+      ],
+      [
+        1787176800,
+        116
+      ],
+      [
+        1787263200,
+        116
+      ],
+      [
+        1787349600,
+        116
+      ],
+      [
+        1787436000,
+        116
+      ],
+      [
+        1787522400,
+        116
+      ],
+      [
+        1787608800,
+        97
+      ],
+      [
+        1787695200,
+        97
+      ],
+      [
+        1787781600,
+        100
+      ],
+      [
+        1787868000,
+        100
+      ],
+      [
+        1787954400,
+        100
+      ],
+      [
+        1788040800,
+        100
+      ],
+      [
+        1788127200,
+        103
+      ],
+      [
+        1788213600,
+        98
+      ],
+      [
+        1788300000,
+        98
+      ],
+      [
+        1788386400,
+        107
+      ],
+      [
+        1788472800,
+        110
+      ],
+      [
+        1788559200,
+        113
+      ],
+      [
+        1788645600,
+        113
+      ],
+      [
+        1788732000,
+        113
+      ],
+      [
+        1788818400,
+        110
+      ],
+      [
+        1788904800,
+        110
+      ],
+      [
+        1788991200,
+        108
+      ],
+      [
+        1789077600,
+        111
+      ],
+      [
+        1789164000,
+        108
+      ],
+      [
+        1789250400,
+        105
+      ],
+      [
+        1789336800,
+        105
+      ],
+      [
+        1789423200,
+        90
+      ],
+      [
+        1789509600,
+        90
+      ],
+      [
+        1789596000,
+        90
+      ],
+      [
+        1789682400,
+        93
+      ],
+      [
+        1789768800,
+        90
+      ],
+      [
+        1789855200,
+        93
+      ],
+      [
+        1789941600,
+        78
+      ],
+      [
+        1790028000,
+        78
+      ],
+      [
+        1790114400,
+        90
+      ],
+      [
+        1790200800,
+        96
+      ],
+      [
+        1790287200,
+        93
+      ],
+      [
+        1790373600,
+        93
+      ],
+      [
+        1790460000,
+        93
+      ],
+      [
+        1790546400,
+        95
+      ],
+      [
+        1790632800,
+        81
+      ],
+      [
+        1790719200,
+        81
+      ],
+      [
+        1790805600,
+        85
+      ],
+      [
+        1790892000,
+        87
+      ],
+      [
+        1790978400,
+        85
+      ],
+      [
+        1791064800,
+        79
+      ],
+      [
+        1791151200,
+        79
+      ],
+      [
+        1791237600,
+        79
+      ],
+      [
+        1791324000,
+        107
+      ],
+      [
+        1791410400,
+        104
+      ],
+      [
+        1791496800,
+        132
+      ],
+      [
+        1791583200,
+        122
+      ],
+      [
+        1791669600,
+        122
+      ],
+      [
+        1791756000,
+        122
+      ],
+      [
+        1791842400,
+        128
+      ]
+    ]
+  }
+}

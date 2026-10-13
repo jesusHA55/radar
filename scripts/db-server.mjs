@@ -3,6 +3,13 @@ import net from "node:net";
 
 import EmbeddedPostgres from "embedded-postgres";
 
+// Load .env.local (Next does this automatically; scripts must do it manually).
+try {
+  process.loadEnvFile?.(".env.local");
+} catch {
+  // ignore
+}
+
 /**
  * Local development database: a real, embedded PostgreSQL cluster.
  *

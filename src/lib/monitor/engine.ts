@@ -172,6 +172,7 @@ export async function checkWatch(
   if (!watch) return { watchId, status: "error", error: "watch not found" };
   if (!watch.isActive && !manual) return { watchId, status: "paused" };
 
+  const provider = await getFlightProvider();
   const quote = await quoteWatchPrice(watch, now);
 
   if (!quote) {
@@ -194,7 +195,7 @@ export async function checkWatch(
     .insert(priceObservations)
     .values({
       watchId: watch.id,
-      provider: getFlightProvider().id,
+      provider: provider.id,
       observedAt: now,
       priceMinor: quote.priceMinor,
       currency: quote.currency,

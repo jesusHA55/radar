@@ -5,7 +5,7 @@ import { OfferCard } from "@/components/offer-card";
 import { SaveSearchForm } from "@/components/save-search-form";
 import { SearchControls, type SearchDefaults } from "@/components/search-controls";
 import { getAirport, isKnownAirport } from "@/lib/domain/airports";
-import { startOfTodayUTC } from "@/lib/domain/date-utils";
+import { startOfTodayUTC, eachDate } from "@/lib/domain/date-utils";
 import { dateWindowFromParams } from "@/lib/domain/date-window";
 import { CABIN_CLASSES, TRIP_TYPES, type CabinClass, type TripType } from "@/lib/domain/trip";
 import { resolveFlightProviderId } from "@/lib/flights";
@@ -35,17 +35,9 @@ function toQuery(params: RawParams): string {
   return query.toString();
 }
 
-const DEPTH_CHOICES = [1, 5, 10];
-
-function defaultDepth(): number {
-  const raw = Number(process.env.SEARCH_DEFAULT_DEPTH);
-  return DEPTH_CHOICES.includes(raw) ? raw : 1;
-}
-
-/** How many dates to sample (provider-dependent). */
-function sampleDepth(params: RawParams): number {
-  const raw = Number(pickParam(params, "depth"));
-  return DEPTH_CHOICES.includes(raw) ? raw : defaultDepth();
+/** Number of days in the (inclusive) departure window. */
+function windowDays(window: { departFrom: string; departTo: string }): number {
+  return eachDate(window.departFrom, window.departTo).length;
 }
 
 /** "Thorough" asks the provider for browser-parity results. */
@@ -114,7 +106,6 @@ async function ControlsFromParams({
     window: { from: window.departFrom, to: window.departTo },
     minNights: window.minNights ?? 3,
     maxNights: window.maxNights ?? 7,
-    depth: sampleDepth(params),
     thorough: isThorough(params),
   };
 
@@ -146,11 +137,12 @@ async function Results({ searchParams }: { searchParams: PageSearchParams }) {
   const cabin = pickEnum<CabinClass>(params, "cabin", CABIN_CLASSES, "economy");
   const adults = pickInt(params, "adults", 1);
   const currency = pickParam(params, "currency") ?? "EUR";
-  const depth = sampleDepth(params);
   const thorough = isThorough(params);
+  // Price every day in the window — the window *is* the search range.
+  const days = windowDays(window);
 
   const spec = { origin, destination, tripType, window, cabin, adults, currency };
-  const searchOptions = { dateSamples: depth, thorough };
+  const searchOptions = { dateSamples: days, thorough };
 
   // Budget guard: never silently exceed the monthly credit cap.
   const [cost, budget] = await Promise.all([
@@ -162,9 +154,10 @@ async function Results({ searchParams }: { searchParams: PageSearchParams }) {
       <div className="mt-8 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
         <p className="font-medium">Not enough flight-data credits for this search</p>
         <p className="mt-1">
-          A {depth}-date search costs ≈{cost} credit{cost === 1 ? "" : "s"}, but only{" "}
-          {budget.remaining} remain this month ({budget.credits}/{budget.budget} used). Lower
-          the search depth, or switch to the demo provider in Settings.
+          Covering all {days} day{days === 1 ? "" : "s"} in your window costs ≈{cost}{" "}
+          credit{cost === 1 ? "" : "s"}, but only {budget.remaining} remain this month (
+          {budget.credits}/{budget.budget} used). Narrow the date range, or switch to the
+          demo provider in Settings.
         </p>
       </div>
     );

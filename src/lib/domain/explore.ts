@@ -81,13 +81,33 @@ export function sortDeals(deals: DestinationDeal[], sort: ExploreSort): Destinat
   return sorted;
 }
 
+/**
+ * Keep one entry per destination.
+ *
+ * Providers can return several fares for the same airport (different airlines
+ * or dates); without this, results contain duplicate destinations — which
+ * breaks React keys and makes re-ordering look wrong.
+ */
+export function dedupeByDestination(deals: DestinationDeal[]): DestinationDeal[] {
+  const seen = new Set<string>();
+  const out: DestinationDeal[] = [];
+  for (const deal of deals) {
+    if (seen.has(deal.destination)) continue;
+    seen.add(deal.destination);
+    out.push(deal);
+  }
+  return out;
+}
+
 export function applyExplore(
   deals: DestinationDeal[],
   sort: ExploreSort,
   filters: ExploreFilters,
 ): DestinationDeal[] {
   const kept = deals.filter((deal) => matchesFilters(deal, filters));
-  return sortDeals(kept, sort).slice(0, filters.limit);
+  // Sort first, then keep the single best entry per destination for the chosen
+  // ranking (cheapest / fastest / best value / soonest).
+  return dedupeByDestination(sortDeals(kept, sort)).slice(0, filters.limit);
 }
 
 /** Distinct countries present in a deal set, sorted for stable UI options. */

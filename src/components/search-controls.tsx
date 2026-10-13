@@ -23,15 +23,8 @@ export type SearchDefaults = {
   window: FlexibleDatesValue;
   minNights: number;
   maxNights: number;
-  depth: number;
   thorough: boolean;
 };
-
-const DEPTH_OPTIONS = [
-  { value: 1, label: "Fast — 1 date" },
-  { value: 5, label: "Balanced — 5 dates" },
-  { value: 10, label: "Thorough — 10 dates" },
-] as const;
 
 const SORTED_AIRPORTS = [...AIRPORTS].sort((a, b) => a.city.localeCompare(b.city));
 
@@ -46,6 +39,18 @@ function AirportOptions() {
 const fieldClass =
   "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-400";
 const labelClass = "mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400";
+
+/** Inclusive number of days in a range (1 for a single day). */
+function daysInRange(value: FlexibleDatesValue): number {
+  if (!value.from) return 0;
+  if (!value.to || value.to < value.from) return 1;
+  return (
+    Math.round(
+      (Date.parse(`${value.to}T00:00:00Z`) - Date.parse(`${value.from}T00:00:00Z`)) /
+        86_400_000,
+    ) + 1
+  );
+}
 
 export function SearchControls({
   defaults,
@@ -68,10 +73,10 @@ export function SearchControls({
   const [range, setRange] = useState<FlexibleDatesValue>(defaults.window);
   const [minNights, setMinNights] = useState(defaults.minNights);
   const [maxNights, setMaxNights] = useState(defaults.maxNights);
-  const [depth, setDepth] = useState(defaults.depth);
   const [thorough, setThorough] = useState(defaults.thorough);
 
-  const estimatedCredits = depth * (tripType === "round-trip" ? 2 : 1);
+  const days = daysInRange(range);
+  const estimatedCredits = Math.max(1, days) * (tripType === "round-trip" ? 2 : 1);
 
   function swap() {
     setOrigin(destination);
@@ -93,7 +98,6 @@ export function SearchControls({
       qs.set("minNights", String(minNights));
       qs.set("maxNights", String(maxNights));
     }
-    qs.set("depth", String(depth));
     if (thorough) qs.set("thorough", "1");
     startTransition(() => router.push(`/search?${qs.toString()}`));
   }
@@ -243,37 +247,19 @@ export function SearchControls({
         <legend className="px-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
           Search quality
         </legend>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className={labelClass} htmlFor="depth">
-              Dates to sample
-            </label>
-            <select
-              id="depth"
-              className={fieldClass}
-              value={depth}
-              onChange={(e) => setDepth(Number(e.target.value))}
-            >
-              {DEPTH_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <label className="mt-5 flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-            <input
-              type="checkbox"
-              checked={thorough}
-              onChange={(e) => setThorough(e.target.checked)}
-              className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
-            />
-            Thorough (exact browser results)
-          </label>
-        </div>
+        <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+          <input
+            type="checkbox"
+            checked={thorough}
+            onChange={(e) => setThorough(e.target.checked)}
+            className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
+          />
+          Thorough (exact browser results)
+        </label>
         <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-          Google Flights needs exact dates, so each search samples a few across
-          your window — more dates gets you closer to the true cheapest.{" "}
+          We price <strong>every day</strong> in your window
+          {days > 0 ? ` (${days} day${days === 1 ? "" : "s"})` : ""}, so flexible dates
+          are fully covered — no more first-day-only results.{" "}
           {chargeable ? (
             <>
               Estimated cost ≈{estimatedCredits} credit
@@ -281,7 +267,7 @@ export function SearchControls({
               {estimatedCredits > creditsRemaining && (
                 <span className="text-amber-600 dark:text-amber-400">
                   {" "}
-                  Not enough credits for this depth.
+                  Not enough credits for this window.
                 </span>
               )}
             </>

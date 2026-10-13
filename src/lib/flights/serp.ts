@@ -54,15 +54,18 @@ function envInt(name: string, fallback: number): number {
   return Number.isFinite(raw) && raw > 0 ? raw : fallback;
 }
 
+/** Upper bound on sampled dates (a sanity guard, not a cost control). */
+const MAX_DATE_SAMPLES = 400;
+
 function defaultDateSamples(): number {
-  return Math.min(10, envInt("SERPAPI_DATE_SAMPLES", 1));
+  return Math.min(MAX_DATE_SAMPLES, envInt("SERPAPI_DATE_SAMPLES", 1));
 }
 
 /** Date samples for a search: the caller's choice, else the env default. */
 function resolveDateSamples(options?: SearchOptions): number {
   const requested = options?.dateSamples;
   if (typeof requested === "number" && Number.isFinite(requested) && requested > 0) {
-    return Math.min(10, Math.floor(requested));
+    return Math.min(MAX_DATE_SAMPLES, Math.floor(requested));
   }
   return defaultDateSamples();
 }

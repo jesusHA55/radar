@@ -9,6 +9,7 @@ import { startOfTodayUTC } from "@/lib/domain/date-utils";
 import { dateWindowFromParams, type DateWindow } from "@/lib/domain/date-window";
 import {
   EXPLORE_LIMITS,
+  EXPLORE_SORT_LABELS,
   applyExplore,
   isExploreSort,
   pricePerHourMinor,
@@ -225,7 +226,7 @@ async function Results({ searchParams }: { searchParams: PageSearchParams }) {
     <section className="mt-8">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          Cheapest from {parsed.origin}
+          {EXPLORE_SORT_LABELS[parsed.sort]} from {parsed.origin}
         </h2>
         <div className="flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
           <span>
@@ -259,7 +260,7 @@ async function Results({ searchParams }: { searchParams: PageSearchParams }) {
           </thead>
           <tbody>
             {ranked.map((deal, index) => (
-              <DealRow key={deal.destination} deal={deal} rank={index + 1} />
+              <DealRow key={`${deal.destination}-${index}`} deal={deal} rank={index + 1} />
             ))}
           </tbody>
         </table>

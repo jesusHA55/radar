@@ -11,7 +11,8 @@ import {
   type SerpExploreDestination,
   type SerpOffer,
 } from "@/lib/flights/serp-mappers";
-import type { SearchSpec } from "@/lib/flights/types";
+import { applyExplore, dedupeByDestination } from "@/lib/domain/explore";
+import type { DestinationDeal, SearchSpec } from "@/lib/flights/types";
 
 /**
  * Fixture-based checks for the SerpApi mappers.
@@ -105,6 +106,25 @@ const returnOffers = mergeOffers(
   fixture<FlightsResponse>("google-flights-roundtrip-return"),
 );
 assert.ok(returnOffers.length >= 1, "expected a return-leg offer");
+
+/* --- explore: dedupe + ranking ------------------------------------ */
+const withDuplicates: DestinationDeal[] = [
+  { destination: "BCN", city: "Barcelona", country: "Spain", price: { amountMinor: 9000, currency: "EUR" }, departDate: "2026-11-10", distanceKm: 1000, durationMinutes: 120, stops: 0 },
+  { destination: "BCN", city: "Barcelona", country: "Spain", price: { amountMinor: 7000, currency: "EUR" }, departDate: "2026-11-12", distanceKm: 1000, durationMinutes: 150, stops: 1 },
+  { destination: "LIS", city: "Lisbon", country: "Portugal", price: { amountMinor: 8000, currency: "EUR" }, departDate: "2026-11-11", distanceKm: 1500, durationMinutes: 180, stops: 0 },
+];
+assert.equal(dedupeByDestination(withDuplicates).length, 2, "duplicate destinations should collapse");
+
+const cheapestRanked = applyExplore(withDuplicates, "cheapest", { directOnly: false, limit: 25 });
+assert.deepEqual(
+  cheapestRanked.map((d) => d.destination),
+  ["BCN", "LIS"],
+  "cheapest ranking should be unique and ordered",
+);
+assert.equal(cheapestRanked[0].price.amountMinor, 7000, "keeps the cheapest fare per destination");
+
+const fastestRanked = applyExplore(withDuplicates, "fastest", { directOnly: false, limit: 25 });
+assert.equal(fastestRanked[0].durationMinutes, 120, "fastest keeps the quickest fare per destination");
 
 console.log(
   `✓ mappers ok — ${oneWayOffers.length} one-way offers, ${deals.length} destinations, ` +
